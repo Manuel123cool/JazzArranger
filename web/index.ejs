@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chord Trainer</title>
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div id="output"></div>
+    <div id="output2"></div>
+    <!--
+        <script src="https://cdn.jsdelivr.net/npm/vexflow@4.0.3/build/cjs/vexflow.js"></script>>
+
+    -->
+    <script>
+        const indexForRoute = <%= index %>;
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
+    <script src="chordIdentifier.js" type"text/javscript"></script>
+
+    <script src="createStaffNotes.js" type"text/javscript"></script>
+    <script src="grouper.js" type"text/javscript"></script>
+
+    <script src="renderMeasures.js" type"text/javscript"></script>
+    <script src="getData.js" type"text/javscript"></script>
+</body>
+</html>
