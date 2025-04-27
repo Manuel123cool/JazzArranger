@@ -5,8 +5,8 @@ if (typeof VexFlow === "undefined") {
   }
   
   const VF = VexFlow;
-  
-  function convertToVexFlowKey(note) {
+
+  function convertToVexFlowKey(note, keySign) {
     if (note == "Rest") {
       return "b/4"
     }
@@ -24,7 +24,7 @@ if (typeof VexFlow === "undefined") {
     } else if (accidental === "-") {
       key += "b";
     }
-  
+
     return `${key}/${octave}`;
   }
   
@@ -57,19 +57,39 @@ if (typeof VexFlow === "undefined") {
     return durationMap[music21Duration] || 'q'; // Default: Viertelnote
 }
 
-  function createStaveNotesFromJson(jsonData) {
+  function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) {
 
     let staffNotesMeasures = []
-    jsonData.forEach((measure) => {
+    jsonData.forEach((measure, index0 ) => {
       let staffNotesMeasure = []
 
       let tripletNotes = []
       measure.forEach( (element, index) => {
-        
+        let keys = [convertToVexFlowKey(element.relative_to_key, keySign)]
+        if (voicings[index0][index].length > 0) {
+          let voicingIndex = null;
+          jsonData.forEach((measure, indexDsonData) => {
+                measure.forEach( (element, indexDsonData1) => {
+                  if (Object.hasOwn(element, 'voicingIndex') && indexDsonData == index0 && indexDsonData1 == index) {
+                    voicingIndex = element.voicingIndex;
+                  }  
+                  console.log(index , indexDsonData ,  index0 , indexDsonData1 , index)
+
+              })
+          })
+          if (voicingIndex != null) {
+            keys = []
+            for (let i = 0; i < voicings[index0][index][voicingIndex][1].length; ++i) {
+              
+              keys.push(convertToVexFlowKey(voicings[index0][index][voicingIndex][1][i], keySign))
+            }
+          }
+          
+        }
         let duration = music21ToVexflowDuration(element.elem_length)
         const note = new VF.StaveNote({
-          keys: [convertToVexFlowKey(element.elem_name)],
-          duration: (duration + (element.elem_name == "Rest" ? "r" : "")),
+          keys: keys,
+          duration: (duration + (element.relative_to_key == "Rest" ? "r" : "")),
           clef: "treble", // Akkordnoten im Violinschlüssel
         });
         const isFlat = note.keys[0].split("/")[0].length == 2 && note.keys[0][1] == "b"

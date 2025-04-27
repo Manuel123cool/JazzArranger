@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Namen mit Links</title>
+    <style>
+        a {
+           margin-right: 20px; 
+        }
+    </style>
+</head>
+<body>
+    <div id="namensListe"></div>
+
+    <script>
+        function createLinks(names) {
+            const ul = document.createElement('ul');
+
+            names.forEach((name, index) => {
+
+
+            // Erstelle das erste <li>-Element und den ersten Link
+            const li1 = document.createElement('li');
+            
+            const link1 = document.createElement('a');
+            link1.href = `http://localhost:3000/${index}`;
+            link1.textContent = name;
+            li1.appendChild(link1);
+
+            // Erstelle das zweite <li>-Element und den zweiten Link
+            const li2 = document.createElement('li');
+            const link2 = document.createElement('a');
+            link2.href = `http://localhost:3000/getPDF/${index}`;
+            link2.textContent = 'Get PDF';
+            li1.appendChild(link2);
+
+            const li3= document.createElement('li');
+            const link3 = document.createElement('a');
+            link3.href = `http://localhost:3000/getXML/${index}`;
+            link3.textContent = 'Get XML';
+            li1.appendChild(link3);
+
+            // Füge die <li>-Elemente zum <ul> hinzu
+            ul.appendChild(li1);
+
+            // Füge das <ul> zum DOM hinzu
+        }); 
+        document.getElementById('namensListe').appendChild(ul);
+
+    }
+
+        // Async-Funktion zum Ausführen des awaits
+        (async function() {
+            const url = "/getMainData";
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP-Error: ${response.status}`);
+                const json = await response.json();
+                
+                // Prüfen, ob die Daten ein Array sind
+                if (!Array.isArray(json)) {
+                    throw new Error('Daten sind kein Array');
+                }
+                
+                createLinks(json);
+            } catch (error) {
+                console.error('Fehler:', error.message);
+                // Optional: Fehlermeldung für Benutzer anzeigen
+                namensListe.textContent = 'Fehler beim Laden der Daten.';
+            }
+        })();
+    </script>
+</body>
+</html>

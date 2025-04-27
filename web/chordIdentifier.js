@@ -6,45 +6,63 @@ const possibleChords = {
 };
 
 const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const moreCharps = ['B#', null, null, null, null, "E#", null, null, null, null, null, null];
 const flatNoteNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+const moreflatNoteNames = [null, null, null, null, "Fb", null, null, null, null, null, null, "Cb"];
 
 function getChordSymbol(notes) {
-    // Parse notes to MIDI numbers
-    const midiNotes = notes.map(note => {
-        const [, pitch, accidental, octave] = note.match(/^([A-G])(--|-|#)?(\d)$/);
-        let noteIndex;
-        
-        if (accidental === '#') {
-            noteIndex = noteNames.indexOf(pitch + '#');
-        } else if (accidental === '-') {
-            noteIndex = flatNoteNames.indexOf(pitch + 'b');
-        } else if (accidental === '--') {
-            // Double flat: shift two semitones down
-            noteIndex = (noteNames.indexOf(pitch) - 2 + 12) % 12;
-        } else {
-            noteIndex = noteNames.indexOf(pitch);
-        }
-        
-        return noteIndex;
-    });
-
-    // Normalize to pitch classes (0-11)
-    const pitchClasses = midiNotes.map(note => note % 12).sort((a, b) => a - b);
     
-    // Try each possible root
-    for (let root = 0; root < 12; root++) {
-        // Shift pitch classes to test this root
-        const shifted = pitchClasses.map(pc => (pc - root + 12) % 12).sort((a, b) => a - b);
-        
-        // Check against each chord type
-        for (let chordType in possibleChords) {
-            const chordIntervals = possibleChords[chordType].sort((a, b) => a - b);
-            if (arraysEqual(shifted, chordIntervals)) {
-                return flatNoteNames[root] + chordType.replace('X', '');
+    if (notes.length == 0) {
+        return "Unknown chord";
+    }
+    notes = notes.map(note => {
+        const [, pitch, accidental, octave] = note.match(/^([A-G])(--|-|#)?(\d)$/);
+        return pitch + (accidental != undefined ? accidental : "");
+    });
+    console.log(notes)
+    if (notes[0] == "C") {
+
+
+    }
+    let root = notes[0].replace("-", "b")
+
+    let indeces = []
+    for (let i = 0; i < notes.length; ++i) {
+        if (noteNames.indexOf(notes[i]) != -1) {
+            indeces.push(noteNames.indexOf(notes[i]))
+        } else if (flatNoteNames.indexOf(notes[i].replace("-", "b")) != -1) {
+            indeces.push(flatNoteNames.indexOf(notes[i].replace("-", "b")))
+            if (notes[i].split('-').length - 1 == 2) {
+                indeces.at(-1) -= 1;
             }
+        } else if (moreCharps.indexOf(notes[i]) != -1) {
+            indeces.push(moreCharps.indexOf(notes[i]))
+        } else if (moreflatNoteNames.indexOf(notes[i].replace("-", "b")) != -1) {
+            indeces.push(moreflatNoteNames.indexOf(notes[i].replace("-", "b")))
+            if (notes[i].split('-').length - 1 == 2) {
+                indeces.at(-1) -= 1;
+            }
+        } 
+    }
+
+    let prevIndex = indeces[0]
+    for (let i = 1; i < indeces.length; ++i) {
+        if (prevIndex > indeces[i]) {
+            indeces[i] += 12;
+        }
+        prevIndex = indeces[i]
+    }
+    const minus = indeces[0]
+    for (let i = 0; i < indeces.length; ++i) {
+        indeces[i] -= minus
+    }
+
+    for (let chordType in possibleChords) {
+        if (arraysEqual(possibleChords[chordType], indeces)) {
+            return root + chordType.replace('X', '');
         }
     }
-    
+
     return "Unknown chord";
 }
 

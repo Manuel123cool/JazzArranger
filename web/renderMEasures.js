@@ -101,6 +101,28 @@ const svg = document.querySelector('svg');
 
 let isClicked = null;
 
+async function changeOriginalData(originalData) {
+    console.log(JSON.stringify(originalData))
+    const url = "/saveStatus/" + indexForRoute;
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            body: JSON.stringify(originalData),
+            headers: { 
+                "Content-Type": "application/json" // 🠐- Wichtig!
+              },
+        });
+        if (!response.ok) {
+        throw new Error(`Response status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        console.log(json);
+    } catch (error) {
+        console.error(error.message);
+    }
+}
+
 // Globale Event-Listener für benutzerdefinierte chordClick-Events
 svg.addEventListener('chordClick', (e) => {
     context.clear()
@@ -113,17 +135,13 @@ svg.addEventListener('chordClick', (e) => {
     const groupIndex = e.detail.chordPosition[2]
     const measureInGroupIndex = e.detail.chordPosition[0]
     const noteIndex = e.detail.chordPosition[1]
-     console.log(groupIndex, measureInGroupIndex, noteIndex)
+    const measureIndex = groupIndex * 3 + measureInGroupIndex;
 
     if (e.detail.allData.chordNames[groupIndex][measureInGroupIndex][noteIndex] != "Unknown chord") {
         if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
              // Neue Keys aus den Voicings erstellen (nur erste Note oder alle Voicings)
              let newKeys = [];
-             if (e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].keys.length > 0) {
-                 newKeys.push(e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].keys[0]); // Erste Note behalten
-             }
 
-             
              if (!e.detail.allData.addedVoicingsIndeces) {
                 e.detail.allData.addedVoicingsIndeces = []
              }
@@ -131,27 +149,34 @@ svg.addEventListener('chordClick', (e) => {
              let voicngIndex = 0;
              let lastAddedVoicingIndex = null;
 
+             if (Object.hasOwn(e.detail.originalData[measureIndex][noteIndex], 'voicingIndex')) {
+                voicngIndex = e.detail.originalData[measureIndex][noteIndex].voicingIndex
+             }
+
              for (let i = 0; i < e.detail.allData.addedVoicingsIndeces.length; ++i) {
                 if (JSON.stringify(e.detail.allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([groupIndex, measureInGroupIndex, noteIndex])) {
                     lastAddedVoicingIndex = i;
                 }
              }
-             console.log(e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex])
 
              if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length - 1) {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] + 1;
             }
-             console.log(voicngIndex)
+
+            if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] + 1 == e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length) {
+                voicngIndex = 0;
+            }
              // Voicings hinzufügen (falls vorhanden)
              if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
-                for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length - 1; ++m) {
+                for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length; ++m) {
                     newKeys.push(convertToVexFlowKey(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1][m]));
                 }
                 if (newKeys.length > 1) {
                     e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
                 }    
              }
-            
+             e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
+             changeOriginalData(e.detail.originalData);
  
              // Dauer der Note anpassen (entferne "r" für Rest)
              const duration = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].getDuration().replace("r", "");
@@ -167,8 +192,8 @@ svg.addEventListener('chordClick', (e) => {
     }
     isClicked = true;
     for (let i = 0; i < e.detail.allData.staveNotes.length ; ++i) {
-        renderThreeMeasure(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData); 
-    }  
+        renderThreeMeasure(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber); 
+    }
     isClicked = false;
 
     console.log(`Geklickter Akkord: ${e.detail.chord} (Index: ${e.detail.chordPosition})`);
@@ -287,7 +312,7 @@ function applyAccidentals(notes, keySignature) {
 }
 
 // Angepasste renderOneMeasure-Funktion
-function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex) {
+function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData) {
     const keySignatureMap = {
         '-7': 'Cb', '-6': 'Gb', '-5': 'Db', '-4': 'Ab', '-3': 'Eb', '-2': 'Bb', '-1': 'F',
         '0': 'C', '1': 'G', '2': 'D', '3': 'A', '4': 'E', '5': 'B', '6': 'F#', '7': 'C#'
@@ -376,7 +401,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
             }
         }
     }
-console.log("gruoups", trebleNoteTupletGroups)
     const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, indecesTuples), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
@@ -452,8 +476,9 @@ console.log("gruoups", trebleNoteTupletGroups)
                 // Event-Listener für das Rechteck
                 rect.addEventListener('click', () => {
                     console.log(`Akkord ${chordText} wurde geklickt! Position: ${chordPosition}`);
+                    console.log(originalData)
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData },
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -463,7 +488,7 @@ console.log("gruoups", trebleNoteTupletGroups)
                     e.preventDefault();
                     console.log(`Akkord ${chordText} wurde getippt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData },
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -473,8 +498,8 @@ console.log("gruoups", trebleNoteTupletGroups)
 }
 
 // Angepasste renderThreeMeasure-Funktion
-function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allData) {
-    console.log(musicElements)
+function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign) {
+    console.log(originalData)
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < 3; ++i) {
         musicElements.push([
@@ -497,51 +522,56 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
             })
         );
     }
-    console.log("bas", musicElementsBase)
+    console.log("bas", musicElementsBase, lineIndex)
 
     if (allData.addedVoicingsIndeces) {
-        let usedVoicing = null;
-        musicElementsIndeces = null;
+        let usedVoicings = [];
+        musicElementsIndeces = [];
+            
         for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
             for (let j = 0; j < musicElementsBase.length; ++j) { 
                 
                 for (let k = 0; k < musicElementsBase[j].length; ++k) {
                     const voicingsIndeces = allData.addedVoicingsIndeces[i];
                     if (allData.addedVoicingsIndeces[i][0] == lineIndex && allData.addedVoicingsIndeces[i][1] == j && allData.addedVoicingsIndeces[i][2] == k) {
-                        usedVoicing = allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0];
-                        musicElementsIndeces = [j, k]
+                        if (allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0].length > 0) {
+                            usedVoicings.push(allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0]);
+                            musicElementsIndeces.push([j, k])
+                        }
+                        
                     }
                 }
             }
         }
-       
-        if (usedVoicing) {
+        
+        
+        for (let i = 0; i < usedVoicings.length; ++i) {
+            const usedVoicing = usedVoicings[i];
             let newKeys = [];
             // Voicings hinzufügen (falls vorhanden)
-            if (musicElementsBase[musicElementsIndeces[0]][musicElementsIndeces[1]].keys.length == 1) {
 
-                for (let m = 0; m < usedVoicing.length; ++m) {
-                    newKeys.push(convertToVexFlowKey(usedVoicing[m]));
-                }
+            for (let m = 0; m < usedVoicing.length; ++m) {
+                newKeys.push(convertToVexFlowKey(usedVoicing[m]));
             }
-            
 
             // Dauer der Note anpassen (entferne "r" für Rest)
-            const duration = musicElementsBase[musicElementsIndeces[0]][musicElementsIndeces[1]].getDuration().replace("r", "");
+            const duration = musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].getDuration().replace("r", "");
 
             // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
+            console.log(newKeys, duration, musicElementsBase, musicElementsIndeces[i], usedVoicing)
             const newNote = new VexFlow.StaveNote({
                 keys: newKeys,
                 duration: duration,
                 clef: "bass"
             });
-            musicElementsBase[musicElementsIndeces[0]][musicElementsIndeces[1]] = newNote;
+
+            musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]] = newNote;
         }
             //e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, 0]);
                
     }
     const leftOffset = 5;
-    renderOneMeasure(musicElementsBase[0], musicElements[0], 0 + leftOffset, yOffset, true, 1, chordNames[0], allData, 0, lineIndex);
-    renderOneMeasure(musicElementsBase[1], musicElements[1], 350 + leftOffset, yOffset, false, 1, chordNames[1], allData, 1, lineIndex);
-    renderOneMeasure(musicElementsBase[2], musicElements[2], 700 + leftOffset, yOffset, false, 1, chordNames[2], allData, 2, lineIndex);
+    renderOneMeasure(musicElementsBase[0], musicElements[0], 0 + leftOffset, yOffset, true, keySign, chordNames[0], allData, 0, lineIndex, originalData);
+    renderOneMeasure(musicElementsBase[1], musicElements[1], 350 + leftOffset, yOffset, false, keySign, chordNames[1], allData, 1, lineIndex, originalData);
+    renderOneMeasure(musicElementsBase[2], musicElements[2], 700 + leftOffset, yOffset, false, keySign, chordNames[2], allData, 2, lineIndex, originalData);
 }

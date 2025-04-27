@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Transposer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input, button {
+            padding: 8px;
+            font-size: 16px;
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Score Transposition</h1>
+        
+        <label for="transposeValue">Transpositionswert:</label>
+        <input type="number" id="transposeValue" value="0">
+        
+        <button onclick="transposeScore()">Transponieren</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function transposeScore() {
+            const transposeValue = parseInt(document.getElementById('transposeValue').value);
+            const url = new URL(window.location.href);
+
+            // Use URLSearchParams to access the query parameters
+            const params = new URLSearchParams(url.search);
+
+            const scoreId = params.get('scoreId');
+            // Hier die gewünschte API-URL eintragen
+            fetch('/transpose/' + scoreId + "?" + "transposeValue" + "=" + transposeValue)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('result').innerHTML = `Erfolgreich transponiert: ${JSON.stringify(data)}`;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `Fehler: ${error.message}`;
+            });
+        }
+    </script>
+</body>
+</html>

@@ -41,19 +41,33 @@ function createTubletIndexFromJson(jsonData) {
   return indeces;
 }
 
+function allDataAddVoicingIndeces(allData, originalData) {
+  allData.addedVoicingsIndeces = []
+  originalData.forEach((measure, index0) => {
+    measure.forEach( (element, index) => {
+      if (Object.hasOwn(element, 'voicingIndex')) {
+        allData.addedVoicingsIndeces.push([Math.floor(index0 / 3), index0 % 3, index, element.voicingIndex]);
+    }  
+    })
+  })
+  console.log(allData.addedVoicingsIndeces)
+  return allData;
+}
+
 function getVoicings(jsonData) {
   let voicingsMeasures = []
   jsonData.forEach((measure) => {
     let voicingsMeasure = []
 
     measure.forEach( (element, index) => {
-      voicingsMeasure.push(element.voicings ? element.voicings : [])
+      voicingsMeasure.push(element.relativeVoicings ? element.relativeVoicings : [])
     })
     voicingsMeasures.push(voicingsMeasure);
   })
 
   return voicingsMeasures;
 }
+
 async function syncFetch(url) {
     try {
       const response = await fetch(url);
@@ -73,15 +87,21 @@ async function syncFetch(url) {
     try {
       // Fetch ausführen
       fetchData = await syncFetch('http://localhost:3000/data/' + indexForRoute); // Example API
-  
+      console.log(fetchData)
+      keySign = fetchData["keySign"]
+      fetchData = fetchData["noteInfo"]
+
       // Code, der NUR nach dem Fetch ausgeführt wird
+
       let tupletsIndeces = createTubletIndexFromJson(fetchData);
-      staveNotes = createStaveNotesFromJson(fetchData);
+      staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData));
       staveNotes = splitIntoThrees(staveNotes);
       let chordNames = splitIntoThrees(getChordNames(fetchData));
       let voicings = splitIntoThrees(getVoicings(fetchData));
+
+      let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, fetchData);
       for (let i = 0; i < staveNotes.length ; ++i) {
-        renderThreeMeasure(staveNotes[i], 220 * i, i, chordNames[i], {"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}); 
+        renderThreeMeasure(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign); 
       }
 
       // Beispiel: Daten verarbeiten
