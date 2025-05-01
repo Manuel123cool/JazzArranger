@@ -15,15 +15,7 @@ function getChordSymbol(notes) {
     if (notes.length == 0) {
         return "Unknown chord";
     }
-    notes = notes.map(note => {
-        const [, pitch, accidental, octave] = note.match(/^([A-G])(--|-|#)?(\d)$/);
-        return pitch + (accidental != undefined ? accidental : "");
-    });
-    console.log(notes)
-    if (notes[0] == "C") {
-
-
-    }
+    
     let root = notes[0].replace("-", "b")
 
     let indeces = []
@@ -70,10 +62,3 @@ function arraysEqual(arr1, arr2) {
     if (arr1.length !== arr2.length) return false;
     return arr1.every((val, index) => val === arr2[index]);
 }
-
-// Example usage:
-// console.log(getChordSymbol(['C', 'E', 'G', 'B'])); // Output: Cmaj7
-// console.log(getChordSymbol(['D', 'F', 'A', 'C'])); // Output: D-7
-// console.log(getChordSymbol(['Bb', 'D', 'F', 'A'])); // Output: Bb-7
-// console.log(getChordSymbol(['D#', 'G', 'A#', 'C'])); // Output: Eb-7
-// console.log(getChordSymbol(['A--', 'D', 'F', 'A'])); // Output: Gb-7

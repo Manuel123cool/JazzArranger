@@ -1,17 +1,15 @@
 
 function isTuplet(obj) {
-    console.log(obj instanceof VF.Tuplet)
     return obj instanceof VF.Tuplet;
 }
 
 function createBeamEights(notes, notesTriplets, indecesTubles) {
-
-
-    const possibleBeams = [[-1, 2048, 2048, 2048], [2048, 2048, 2048, -1], [-1, 2048, 2048, -1],  [2048, 2048, -1, -1], [2048, 2048, 2048, 2048]]
-    const noteCount = [4, 4, 4, 3, 3, 4, 4];
+    const possibleBeams = [[-1, 2048, 2048, 2048], [2048, 2048, 2048, -1], [-1, 2048, 2048, -1],  [-1, -1, 2048, 2048], [2048, 2048, -1, -1], [2048, 2048, 2048, 2048]]
     
     
     let noLongerThanEights = [];
+    let allNotesTicks = [];
+
     let counter = 0;
     for (let i = 0; i < notes.length; ++i) {
         let continueVar = false;
@@ -26,6 +24,9 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
             if (indecesTubles[j] == i && counter == 0) {
                 noLongerThanEights.push(-1);
                 noLongerThanEights.push(-1);
+
+                allNotesTicks.push(2048 * 2)
+
                 counter += 1;
                 continueVar = true
             }
@@ -34,6 +35,7 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
             continue
         }
         if (notes[i].isRest() || notes[i].getTicks().value() != 2048) {
+            allNotesTicks.push(notes[i].getTicks().value())
             const addedEightRests = notes[i].getTicks().value() / 2048
             for (let j = 0; j < addedEightRests; ++j) {
                 noLongerThanEights.push(-1);
@@ -41,36 +43,53 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
             
         } else {
             noLongerThanEights.push(notes[i].getTicks().value());
+            allNotesTicks.push(notes[i].getTicks().value())
         }
     }
     let beamGroup1 = []
     let beamGroup2 = []
 
-    function getSpliceValues(possibleBeam) {
+    function getSpliceValues(possibleBeam, start) {
+        let notesTickValues = []
         let startIndex = null;
         let length = 0;
-        for (let i = 0; i < possibleBeam.length; ++i) {
-            if (possibleBeam[i] != -1 && startIndex == null) {
+        let counter = 0;
+        for (let i = start; i < allNotesTicks.length; ++i) {
+            if (counter >= 4) {
+                break
+            }
+
+            if (allNotesTicks[i] != 2048) {
+                counter += allNotesTicks[i] / 2048;
+                continue
+            }
+            if (possibleBeam[counter] != -1 && startIndex == null) {
                 startIndex = i;
             } 
-            if (possibleBeam[i] != -1) length += 1;
+            if (possibleBeam[counter] != -1) length += 1;
+            counter += 1
+
         }
         return [startIndex, length]
     }
 
+    const compareArrays = (a, b) =>
+        a.length === b.length &&
+        a.every((element, index) => element === b[index]);
+      
     for (let i = 0; i < possibleBeams.length; ++i) {
         if (noLongerThanEights.length >= 3) {
             // Erste Bedingung: Vergleiche die ersten 4 Elemente von noLongerThanEights, ohne Änderung
-            if (JSON.stringify(noLongerThanEights.slice(0, 4)) === JSON.stringify(possibleBeams[i])) {
+            if (compareArrays(noLongerThanEights.slice(0, 4), possibleBeams[i])) {
                 // Extrahiere den Bereich aus notes ohne Änderung des Original-Arrays
-                const spliceValues = getSpliceValues(possibleBeams[i]);
+                const spliceValues = getSpliceValues(possibleBeams[i], 0);
                 beamGroup1 = notes.slice(spliceValues[0], spliceValues[1] + spliceValues[0]);
             }
             // Zweite Bedingung: Vergleiche die letzten 4 Elemente und prüfe beamGroup1.length
-            if (JSON.stringify(noLongerThanEights.slice(-4)) === JSON.stringify(possibleBeams[i])) {
+            if (compareArrays(noLongerThanEights.slice(-4), possibleBeams[i])) {
                 // Extrahiere die letzten 4 Elemente aus notes ohne Änderung
-                const spliceValues = getSpliceValues(possibleBeams[i]);
-                beamGroup2 = notes.slice(-4).slice(spliceValues[0], spliceValues[0] + spliceValues[1]);
+                const spliceValues = getSpliceValues(possibleBeams[i], 4);
+                beamGroup2 = notes.slice(spliceValues[0], spliceValues[0] + spliceValues[1]);
             }
         }
     }
@@ -102,7 +121,6 @@ const svg = document.querySelector('svg');
 let isClicked = null;
 
 async function changeOriginalData(originalData) {
-    console.log(JSON.stringify(originalData))
     const url = "/saveStatus/" + indexForRoute;
     try {
         const response = await fetch(url, {
@@ -117,7 +135,6 @@ async function changeOriginalData(originalData) {
         }
 
         const json = await response.json();
-        console.log(json);
     } catch (error) {
         console.error(error.message);
     }
@@ -169,7 +186,7 @@ svg.addEventListener('chordClick', (e) => {
              // Voicings hinzufügen (falls vorhanden)
              if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
                 for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length; ++m) {
-                    newKeys.push(convertToVexFlowKey(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1][m]));
+                    newKeys.push(convertToVexFlowKeyVoicing(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1][m]));
                 }
                 if (newKeys.length > 1) {
                     e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
@@ -184,8 +201,14 @@ svg.addEventListener('chordClick', (e) => {
              // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
              const newNote = new VexFlow.StaveNote({
                  keys: newKeys,
-                 duration: duration
+                 duration: duration,
+                 
              });
+             newNote.dots = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].dots
+             if (newNote.dots == 1) {
+                VF.Dot.buildAndAttach([newNote], {all: true})
+
+            }
              e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex] = newNote;
 
         }   
@@ -241,17 +264,31 @@ function removeRedundantAccidentals(notes, keySignature) {
         if (note.isRest()) {
             const duration = note.getDuration();
             const finalDuration = duration.includes("r") ? duration : duration + "r";
-            return new VexFlow.StaveNote({
+            let newNote = new VexFlow.StaveNote({
                 clef: note.clef,
                 keys: newKeys,
-                duration: finalDuration
+                duration: finalDuration,
             });
+            newNote.dots = note.dots
+
+            if (note.dots == 1) {
+                 VF.Dot.buildAndAttach([newNote], {all: true})
+            }
+            return newNote
         }
-        return new VexFlow.StaveNote({
+        let newNote = new VexFlow.StaveNote({
             clef: note.clef,
             keys: newKeys,
-            duration: note.getDuration()
+            duration: note.getDuration(),
         });
+        newNote.dots = note.dots
+
+        if (newNote.dots == 1) {
+             VF.Dot.buildAndAttach([newNote], {all: true})
+
+        }
+        return newNote
+
     });
 }
 
@@ -277,7 +314,6 @@ function applyAccidentals(notes, keySignature) {
 
     const accidentalsInMeasure = {};
     const keyAccidentals = keySignatureAccidentals[keySignature] || {};
-    console.log(notes)
     notes.forEach((note, noteIndex) => {
         note.getKeys().forEach((key, keyIndex) => {
             const [noteName, octave] = key.split('/');
@@ -311,6 +347,15 @@ function applyAccidentals(notes, keySignature) {
     return notes;
 }
 
+function addDotted(notes) {
+    for (let i = 0; i < notes.length; ++i) {
+        if (notes[i].duration.includes("d")) {
+            notes[i].addDotToAll()
+        }
+    }
+    
+    return notes
+}
 // Angepasste renderOneMeasure-Funktion
 function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData) {
     const keySignatureMap = {
@@ -322,7 +367,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     bassStaveNotes = removeRedundantAccidentals(bassStaveNotes, keySignature);
     trebleStaveNotes = removeRedundantAccidentals(trebleStaveNotes, keySignature);
 
-    console.log(bassStaveNotes)
     const trebleStave = new Stave(10 + xOffset, 40 + yOffset, 350);
     if (isFirstMeasure) {
         trebleStave.addClef("treble").addKeySignature(keySignature).addTimeSignature("4/4");
@@ -360,8 +404,11 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         return note;
     });
 
-    const processedTrebleNotes = applyAccidentals(annotatedTrebleNotes, keySignature);
-    const processedBassNotes = applyAccidentals(bassStaveNotes, keySignature);
+    let processedTrebleNotes = applyAccidentals(annotatedTrebleNotes, keySignature);
+    let processedBassNotes = applyAccidentals(bassStaveNotes, keySignature);
+
+    processedTrebleNotes = addDotted(processedTrebleNotes)
+    processedBassNotes = addDotted(processedBassNotes)
 
     // Helper function to check if a group is beamable
     function isBeamableGroup(group) {
@@ -380,7 +427,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     let indecesTuples = []
 
-    console.log(measureIndex, lineIndex)
     for (let i = 0; i < allData.tupletsIndeces.length; ++i) {
         for (let j = 0; j < allData.tupletsIndeces[i].length; ++j) {
             if (allData.tupletsIndeces[i][j][0] != measureIndex + lineIndex * 3) {
@@ -476,7 +522,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                 // Event-Listener für das Rechteck
                 rect.addEventListener('click', () => {
                     console.log(`Akkord ${chordText} wurde geklickt! Position: ${chordPosition}`);
-                    console.log(originalData)
                     const event = new CustomEvent('chordClick', {
                         detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber},
                     });
@@ -499,7 +544,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
 // Angepasste renderThreeMeasure-Funktion
 function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign) {
-    console.log(originalData)
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < 3; ++i) {
         musicElements.push([
@@ -518,11 +562,16 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
             musicElements[i].map(note => {
                 const duration = note.getDuration();
                 const finalDuration = duration.includes("r") ? duration : duration + "r";
-                return new StaveNote({ clef: "bass", keys: ["d/3"], duration: finalDuration });
+                let newNote = new StaveNote({ clef: "bass", keys: ["d/3"], duration: finalDuration });
+
+                newNote.dots = note.dots
+                if (newNote.dots == 1) {
+                    VF.Dot.buildAndAttach([newNote], {all: true});
+                }
+                return newNote
             })
         );
     }
-    console.log("bas", musicElementsBase, lineIndex)
 
     if (allData.addedVoicingsIndeces) {
         let usedVoicings = [];
@@ -534,6 +583,7 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
                 for (let k = 0; k < musicElementsBase[j].length; ++k) {
                     const voicingsIndeces = allData.addedVoicingsIndeces[i];
                     if (allData.addedVoicingsIndeces[i][0] == lineIndex && allData.addedVoicingsIndeces[i][1] == j && allData.addedVoicingsIndeces[i][2] == k) {
+                        console.log(allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]], voicingsIndeces[0], voicingsIndeces[1], voicingsIndeces[2], voicingsIndeces[3])
                         if (allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0].length > 0) {
                             usedVoicings.push(allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0]);
                             musicElementsIndeces.push([j, k])
@@ -551,20 +601,23 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
             // Voicings hinzufügen (falls vorhanden)
 
             for (let m = 0; m < usedVoicing.length; ++m) {
-                newKeys.push(convertToVexFlowKey(usedVoicing[m]));
+                newKeys.push(convertToVexFlowKeyVoicing(usedVoicing[m]));
             }
 
             // Dauer der Note anpassen (entferne "r" für Rest)
             const duration = musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].getDuration().replace("r", "");
 
             // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
-            console.log(newKeys, duration, musicElementsBase, musicElementsIndeces[i], usedVoicing)
             const newNote = new VexFlow.StaveNote({
                 keys: newKeys,
                 duration: duration,
-                clef: "bass"
+                clef: "bass",
             });
+            newNote.dots = musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].dots
 
+            if (newNote.dots == 1) {
+                VF.Dot.buildAndAttach([newNote], {all: true});
+            }
             musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]] = newNote;
         }
             //e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, 0]);

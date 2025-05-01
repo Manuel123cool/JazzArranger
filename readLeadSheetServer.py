@@ -4,6 +4,14 @@ import sys
 import copy 
 from random import randrange
 
+from enum import Enum
+
+class Eccidental(Enum):
+    NONE = 0
+    NATURAL = 1
+    TRUE = 2
+    REST = -1
+
 def getRelativeNoteToKey(note, keySignNum):
     note = copy.deepcopy(note)
     keySign = key.KeySignature(keySignNum)
@@ -11,9 +19,11 @@ def getRelativeNoteToKey(note, keySignNum):
 
     if note.pitch.midi % 12 in scale_pitches:
         note.pitch.accidental = None
-        return note
+        return (note, Eccidental.NONE)
+    elif note.pitch.accidental is None:
+        return (note, Eccidental.NATURAL)
     
-    return note
+    return (note, Eccidental.TRUE)
 
 def analyze_lead_sheet(score, keySign):
     returnArray = []
@@ -65,7 +75,7 @@ def analyze_lead_sheet(score, keySign):
             if isinstance(elem_length, Fraction):
                 elem_length = {"numerator": elem_length.numerator, "denominator": elem_length.denominator}
             
-            relative_to_key = getRelativeNoteToKey(elem, keySign).nameWithOctave if elem_name != "Rest" else "Rest"
+            relative_to_key = (getRelativeNoteToKey(elem, keySign)[0].nameWithOctave, getRelativeNoteToKey(elem, keySign)[1].value) if elem_name != "Rest" else ("Rest", -1)
 
             if matching_chord:
                 chord_name = matching_chord.commonName
@@ -242,10 +252,10 @@ def relativeKeysOfVoicing(voicing, keySign, definingNotes):
     reVoicing[1] = adjust_chord_to_key(notes2, is_sharp(definingNotes, keySign)[0])
     
     for index, n in enumerate(reVoicing[0]):
-        reVoicing[0][index] = getRelativeNoteToKey(n, keySign).nameWithOctave
+        reVoicing[0][index] = (getRelativeNoteToKey(n, keySign)[0].nameWithOctave, getRelativeNoteToKey(n, keySign)[1].value)
     
     for index, n in enumerate(reVoicing[1]):
-        reVoicing[1][index] = getRelativeNoteToKey(n, keySign).nameWithOctave
+        reVoicing[1][index] = (getRelativeNoteToKey(n, keySign)[0].nameWithOctave, getRelativeNoteToKey(n, keySign)[1].value)
 
     return reVoicing
     

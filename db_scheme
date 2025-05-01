@@ -1,0 +1,49 @@
+// Use DBML to define your database structure
+// Docs: https://dbml.dbdiagram.io/docs
+
+Table person {
+  person_id integer [primary key]
+  user_name varchar
+  psw varchar
+}
+
+Table score {
+  score_id integer [primary key]
+  file_name varchar
+  stored_name varchar
+  person measure [ref: <> person.person_id]
+}
+
+Table measure {
+  measure_id integer [primary key]
+  score measure [ref: > score.score_id]
+
+}
+
+Table measure_elem {
+  measure_id integer [primary key]
+  note int [ref: < note.note_id]
+  measure measure [ref: < measure.measure_id]
+}
+
+Table note {
+  note_id integer [primary key]
+  note_key varchar
+  duration float
+  relative_to_key varchar
+  is_natrual bool
+  octave int
+  is_rest bool
+}
+
+Table tuplet {
+  numerator INT
+  denominator INT
+  note int [ref: - note.note_id]
+}
+
+Table voicing {
+  vocing_id integer [primary key]
+  note int [ref: > note.note_id]
+}
+
