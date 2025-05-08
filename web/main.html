@@ -17,29 +17,41 @@
         function createLinks(names) {
             const ul = document.createElement('ul');
 
-            names.forEach((name, index) => {
+            names.forEach((score, index) => {
 
 
             // Erstelle das erste <li>-Element und den ersten Link
             const li1 = document.createElement('li');
             
             const link1 = document.createElement('a');
-            link1.href = `http://localhost:3000/${index}`;
-            link1.textContent = name;
+            link1.href = `http://localhost:3000/${score.score_id}`;
+            link1.textContent = score.file_name;
             li1.appendChild(link1);
 
             // Erstelle das zweite <li>-Element und den zweiten Link
             const li2 = document.createElement('li');
             const link2 = document.createElement('a');
-            link2.href = `http://localhost:3000/getPDF/${index}`;
+            link2.href = `http://localhost:3000/getPDF/${score.score_id}`;
             link2.textContent = 'Get PDF';
             li1.appendChild(link2);
 
             const li3= document.createElement('li');
             const link3 = document.createElement('a');
-            link3.href = `http://localhost:3000/getXML/${index}`;
+            link3.href = `http://localhost:3000/getXML/${score.score_id}`;
             link3.textContent = 'Get XML';
             li1.appendChild(link3);
+            
+            const li4= document.createElement('li');
+            const link4 = document.createElement('a');
+            link4.href = `http://localhost:3000/delete/${score.score_id}`;
+            link4.textContent = 'Delete Score';
+            li1.appendChild(link4);
+            
+            const li5= document.createElement('li');
+            const link5 = document.createElement('a');
+            link5.href = `http://localhost:3000/transpose.html?scoreId=${score.score_id}`;
+            link5.textContent = 'Transpose';
+            li1.appendChild(link5);
 
             // Füge die <li>-Elemente zum <ul> hinzu
             ul.appendChild(li1);

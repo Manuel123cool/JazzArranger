@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voicings with Categories</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .hand-notes {
+            margin-bottom: 20px;
+        }
+        .note-input {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .remove-btn {
+            background-color: #f44336;
+        }
+        .remove-btn:hover {
+            background-color: #da190b;
+        }
+        #voicingList {
+            margin-top: 20px;
+        }
+        .category-section {
+            margin-top: 20px;
+        }
+        .category-display {
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>Add Voicing</h3>
+
+        <div class="hand-notes">
+            <h4>Left Hand Notes</h4>
+            <div id="leftHandInputs">
+                <div class="note-input" id="leftNoteInput1">
+                    <label>Note 1:</label>
+                    <select class="note-select" id="leftNote1"></select>
+                    <label>Octave:</label>
+                    <select class="octave-select" id="leftOctave1">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="addNoteField('left')">Add Note (Left Hand)</button>
+            <button class="remove-btn" onclick="removeNoteField('left')">Remove Note (Left Hand)</button>
+        </div>
+
+        <div class="hand-notes">
+            <h4>Right Hand Notes</h4>
+            <div id="rightHandInputs">
+                <div class="note-input" id="rightNoteInput1">
+                    <label>Note 1:</label>
+                    <select class="note-select" id="rightNote1"></select>
+                    <label>Octave:</label>
+                    <select class="octave-select" id="rightOctave1">
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="addNoteField('right')">Add Note (Right Hand)</button>
+            <button class="remove-btn" onclick="removeNoteField('right')">Remove Note (Right Hand)</button>
+        </div>
+
+        <div class="hand-notes">
+            <h4>Notes Not Played (Implied Notes)</h4>
+            <div id="impliedNotesInputs">
+                <!-- <div class="note-input" id="impliedNoteInput1">
+                    <label>Note 1:</label>
+                    <select class="note-select" id="impliedNote1"></select>
+                    <label>Octave:</label>
+                    <select class="octave-select" id="impliedOctave1">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                    </select>
+                </div> -->
+            </div>
+            <button onclick="addNoteField('implied')">Add Note (Implied)</button>
+            <button class="remove-btn" onclick="removeNoteField('implied')">Remove Note (Implied)</button>
+        </div>
+
+        <div class="category-section">
+            <h4>Voicing Categories</h4>
+            <div id="categoryInputs">
+                <div class="category-input">
+                    <label>Category:</label>
+                    <select class="category-select" id="category1"></select>
+                </div>
+            </div>
+            <button onclick="addCategoryField()">Add Category</button>
+            <button class="remove-btn" onclick="removeCategoryField()">Remove Category</button>
+        </div>
+
+        <div class="category-section">
+            <h4>Manage Categories</h4>
+            <input type="text" id="newCategoryInput" placeholder="Enter new category name">
+            <button onclick="addNewCategory()">Add New Category</button>
+        </div>
+
+        <button onclick="saveVoicing()">Save Voicing</button>
+
+        <div id="voicingList">
+            <h4>Saved Voicings by Category</h4>
+            <div id="categorizedVoicings"></div>
+        </div>
+    </div>
+
+    <script>
+        const notesWithFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+        let savedVoicings = [];
+        let categories = []; // Standardkategorien
+        const maxNotesPerHand = 5;
+        const maxCategories = 5;
+
+        function removeOptions(selectElement) {
+            var i, L = selectElement.options.length - 1;
+            for(i = L; i >= 0; i--) {
+                selectElement.remove(i);
+            }
+        }
+
+        // Populate note dropdowns
+        function populateNoteDropdowns() {
+            const noteSelects = document.querySelectorAll('.note-select');
+            noteSelects.forEach(select => {
+                if (select.options.length != 12) {
+                    removeOptions(select)
+                    notesWithFlat.forEach(note => {
+                        const option = document.createElement('option');
+                        option.value = note;
+                        option.text = note;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // Populate category dropdowns
+        function populateCategoryDropdowns() {
+            const categorySelects = document.querySelectorAll('.category-select');
+            categorySelects.forEach(select => {
+                if (select.options.length != categories.length) {
+                        removeOptions(select)
+                        categories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category;
+                        option.text = category;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // Remove the last note input field for the specified hand
+        function removeNoteField(hand) {
+            let container = document.getElementById(`${hand}HandInputs`);
+            const isNotesInputs = !container;
+            if (!container) container = document.getElementById(`${hand}NotesInputs`);
+            
+
+            const currentNotes = container.querySelectorAll('.note-input');
+
+            if (currentNotes.length > 1 || (isNotesInputs && currentNotes.length == 1)) {
+                const lastNoteDiv = currentNotes[currentNotes.length - 1];
+                lastNoteDiv.remove();
+            } else {
+                alert("At least one note field must remain.");
+            }
+        }
+
+        // Add a new category input field
+        function addNoteField(hand) {
+            let container = document.getElementById(`${hand}HandInputs`);
+            if (!container) container = document.getElementById(`${hand}NotesInputs`);
+
+            const currentNoteCount = container.querySelectorAll('.note-input').length;
+
+            if (currentNoteCount >= maxNotesPerHand) {
+                alert(`Maximum of ${maxNotesPerHand} notes per section reached.`);
+                return;
+            }
+
+            const newNoteIndex = currentNoteCount + 1;
+            const newNoteDiv = document.createElement('div');
+            newNoteDiv.className = 'note-input';
+            newNoteDiv.id = `${hand}NoteInput${newNoteIndex}`;
+            newNoteDiv.innerHTML = `
+                <label>Note ${newNoteIndex}:</label>
+                <select class="note-select" id="${hand}Note${newNoteIndex}"></select>
+                <label>Octave:</label>
+                <select class="octave-select" id="${hand}Octave${newNoteIndex}">
+                    ${hand === 'left' ? 
+                        '<option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>' :
+                        hand === 'right' ?
+                        '<option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>' :
+                        '<option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>'
+                    }
+                </select>
+            `;
+            container.appendChild(newNoteDiv);
+            populateNoteDropdowns();
+        }
+
+        // Remove the last category input field
+        function removeCategoryField() {
+            const container = document.getElementById('categoryInputs');
+            const currentCategories = container.querySelectorAll('.category-input');
+
+            if (currentCategories.length > 1) {
+                const lastCategoryDiv = currentCategories[currentCategories.length - 1];
+                lastCategoryDiv.remove();
+            } else {
+                alert("At least one category field must remain.");
+            }
+        }
+
+        // Add a new category to the list
+        function addNewCategory() {
+            const newCategoryInput = document.getElementById('newCategoryInput');
+            const newCategory = newCategoryInput.value.trim();
+
+            if (newCategory && !categories.includes(newCategory)) {
+                categories.push(newCategory);
+                newCategoryInput.value = '';
+                populateCategoryDropdowns();
+                alert(`Category "${newCategory}" added.`);
+            } else if (!newCategory) {
+                alert("Please enter a category name.");
+            } else {
+                alert("Category already exists.");
+            }
+        }
+
+        // Save the current voicing with categories
+        function saveVoicing() {
+            const voicing = {
+                leftHand: [],
+                rightHand: [],
+                impliedNotes: [],
+                categories: []
+            };
+
+            // Get left hand notes and octaves
+            const leftInputs = document.getElementById('leftHandInputs').querySelectorAll('.note-input');
+            leftInputs.forEach((input, index) => {
+                const note = document.getElementById(`leftNote${index + 1}`).value;
+                const octave = document.getElementById(`leftOctave${index + 1}`).value;
+                if (note) {
+                    voicing.leftHand.push(`${note}${octave}`);
+                }
+            });
+
+            // Get right hand notes and octaves
+            const rightInputs = document.getElementById('rightHandInputs').querySelectorAll('.note-input');
+            rightInputs.forEach((input, index) => {
+                const note = document.getElementById(`rightNote${index + 1}`).value;
+                const octave = document.getElementById(`rightOctave${index + 1}`).value;
+                if (note) {
+                    voicing.rightHand.push(`${note}${octave}`);
+                }
+            });
+
+            // Get implied notes and octaves
+            const impliedInputs = document.getElementById('impliedNotesInputs').querySelectorAll('.note-input');
+            impliedInputs.forEach((input, index) => {
+                const note = document.getElementById(`impliedNote${index + 1}`).value;
+                const octave = document.getElementById(`impliedOctave${index + 1}`).value;
+                if (note) {
+                    voicing.impliedNotes.push(`${note}${octave}`);
+                }
+            });
+
+            // Get categories
+            const categoryInputs = document.getElementById('categoryInputs').querySelectorAll('.category-select');
+            const uniqueCategories = new Set();
+            categoryInputs.forEach(input => {
+                if (input.value) {
+                    uniqueCategories.add(input.value);
+                }
+            });
+            voicing.categories = Array.from(uniqueCategories);
+
+            postVoicing(voicing);
+
+            if (voicing.leftHand.length > 0 || voicing.rightHand.length > 0) {
+                if (voicing.categories.length > 0) {
+                    savedVoicings.push(voicing);
+                    updateVoicingList();
+                    clearInputs();
+                } else {
+                    alert("Please select at least one category.");
+                }
+            } else {
+                alert("Please enter at least one note.");
+            }
+        }
+
+
+        // Update the list of saved voicings by category
+        function updateVoicingList() {
+            const categorizedVoicingsDiv = document.getElementById('categorizedVoicings');
+            categorizedVoicingsDiv.innerHTML = '';
+
+            // Gruppiere Voicings nach Kategorien
+            const voicingsByCategory = {};
+            categories.forEach(category => {
+                voicingsByCategory[category] = [];
+            });
+
+            savedVoicings.forEach((voicing, index) => {
+                voicing.categories.forEach(category => {
+                    voicingsByCategory[category].push({ voicing, index });
+                });
+            });
+
+            // Zeige Voicings nach Kategorien an
+            categories.forEach(category => {
+                if (voicingsByCategory[category].length > 0) {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'category-display';
+                    categoryDiv.innerHTML = `<h5>${category}</h5>`;
+                    const ul = document.createElement('ul');
+
+                    voicingsByCategory[category].forEach(({ voicing, index }) => {
+                        const li = document.createElement('li');
+                        li.textContent = `Voicing ${index + 1}: Left Hand - [${voicing.leftHand.join(', ')}], Right Hand - [${voicing.rightHand.join(', ')}], Implied Notes - [${voicing.impliedNotes.join(', ')}]`;
+                        ul.appendChild(li);
+                    });
+
+                    categoryDiv.appendChild(ul);
+                    categorizedVoicingsDiv.appendChild(categoryDiv);
+                }
+            });
+        }
+
+
+        // Clear the input fields after saving
+        function clearInputs() {
+            const noteSelects = document.querySelectorAll('.note-select');
+            const octaveSelects = document.querySelectorAll('.octave-select');
+            const categorySelects = document.querySelectorAll('.category-select');
+            noteSelects.forEach(select => select.value = '');
+            octaveSelects.forEach(select => select.value = select.options[0].value);
+            categorySelects.forEach(select => select.value = '');
+        }
+
+        // Initialize the dropdowns on page load
+        
+        async function postVoicing(voicingParam) {
+            const url = "/voicing";
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    body: JSON.stringify({"voicing": voicingParam}),
+                    headers: { 
+                        "Content-Type": "application/json" // 🠐- Wichtig!
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error(`Response status: ${response.status}`);
+                }
+
+                const json = await response.json();
+            } catch (error) {
+                console.error(error.message);
+            }
+        }
+
+        async function getVoicings() {
+            const url = "/voicings";
+            try {
+                const response = await fetch(url, {
+                    method: "GET",
+                });
+                if (!response.ok) {
+                    throw new Error(`Response status: ${response.status}`);
+                }
+                const responseResult = await response.json();
+                console.log(responseResult);
+                savedVoicings = responseResult.voicings;
+                categories = responseResult.categories;
+                console.log(savedVoicings);
+                updateVoicingList();
+            } catch (error) {
+                console.error(error.message);
+            }
+        }
+
+        function addCategoryField() {
+            const container = document.getElementById('categoryInputs');
+            const currentCategories = container.querySelectorAll('.category-input').length;
+
+            if (currentCategories >= maxCategories) {
+                alert(`Maximum of ${maxCategories} categories reached.`);
+                return;
+            }
+
+            const newIndex = currentCategories + 1;
+            const newDiv = document.createElement('div');
+            newDiv.className = 'category-input';
+            newDiv.innerHTML = `
+                <label>Category:</label>
+                <select class="category-select" id="category${newIndex}"></select>
+            `;
+            
+            container.appendChild(newDiv);
+            populateCategoryDropdowns();
+        }
+
+        window.onload = function() {
+            getVoicings();
+            populateNoteDropdowns();
+            populateCategoryDropdowns();
+        };
+    </script>
+</body>
+</html>

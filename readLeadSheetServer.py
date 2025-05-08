@@ -308,8 +308,6 @@ def main():
     result = analyze_lead_sheet(score, keySign)
     result = rePossibleVoicings(result, keySign)
 
-    
-
     print(json.dumps({"result": result, "keySign": keySign}))
 
 if __name__ == "__main__":

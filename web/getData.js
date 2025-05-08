@@ -31,7 +31,8 @@ function createTubletIndexFromJson(jsonData) {
     let indexcesMeasure = []
 
     measure.forEach( (element, index) => {
-      if (measure.oneNote && measure.oneNote.hasOwnProperty("oneTuplet") && measure.oneNote.oneTuplet !== null) [
+
+      if (element.oneNote && element.oneNote.hasOwnProperty("oneTuplet") && element.oneNote.oneTuplet !== null) [
         indexcesMeasure.push([index0, index])
       ]
     })
@@ -47,9 +48,10 @@ function allDataAddVoicingIndeces(allData, originalData) {
     measure.forEach( (element, index) => {
       if (Object.hasOwn(element, 'voicingIndex') && element.voicingIndex != -1) {
         allData.addedVoicingsIndeces.push([Math.floor(index0 / 3), index0 % 3, index, element.voicingIndex]);
-    }  
+      }  
     })
   })
+  console.log("alleda", allData.addedVoicingsIndeces)
   return allData;
 }
 

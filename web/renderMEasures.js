@@ -6,7 +6,6 @@ function isTuplet(obj) {
 function createBeamEights(notes, notesTriplets, indecesTubles) {
     const possibleBeams = [[-1, 2048, 2048, 2048], [2048, 2048, 2048, -1], [-1, 2048, 2048, -1],  [-1, -1, 2048, 2048], [2048, 2048, -1, -1], [2048, 2048, 2048, 2048]]
     
-    
     let noLongerThanEights = [];
     let allNotesTicks = [];
 
@@ -120,18 +119,18 @@ const svg = document.querySelector('svg');
 
 let isClicked = null;
 
-async function changeOriginalData(originalData) {
+async function changeVoicingIndex(measureId, voicingIndex, elemId) {
     const url = "/saveStatus/" + indexForRoute;
     try {
         const response = await fetch(url, {
             method: "POST",
-            body: JSON.stringify(originalData),
+            body: JSON.stringify({"measureId": measureId, "voicingIndex": voicingIndex, "elemId": elemId}),
             headers: { 
                 "Content-Type": "application/json" // 🠐- Wichtig!
               },
         });
         if (!response.ok) {
-        throw new Error(`Response status: ${response.status}`);
+            throw new Error(`Response status: ${response.status}`);
         }
 
         const json = await response.json();
@@ -143,7 +142,6 @@ async function changeOriginalData(originalData) {
 // Globale Event-Listener für benutzerdefinierte chordClick-Events
 svg.addEventListener('chordClick', (e) => {
     context.clear()
-    resetGlobalChordCounter()
 
     let index1 = null
     let index2 = null
@@ -169,6 +167,10 @@ svg.addEventListener('chordClick', (e) => {
              if (Object.hasOwn(e.detail.originalData[measureIndex][noteIndex], 'voicingIndex')) {
                 voicngIndex = e.detail.originalData[measureIndex][noteIndex].voicingIndex
              }
+            
+             if (e.detail.originalData[measureIndex][noteIndex].voicingIndex == -1) {
+                voicngIndex = 0;
+             }
 
              for (let i = 0; i < e.detail.allData.addedVoicingsIndeces.length; ++i) {
                 if (JSON.stringify(e.detail.allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([groupIndex, measureInGroupIndex, noteIndex])) {
@@ -193,21 +195,22 @@ svg.addEventListener('chordClick', (e) => {
                 }    
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
-             changeOriginalData(e.detail.originalData);
- 
+
+             changeVoicingIndex(measureIndex, voicngIndex, noteIndex);
+
              // Dauer der Note anpassen (entferne "r" für Rest)
              const duration = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].getDuration().replace("r", "");
  
              // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
-             const newNote = new VexFlow.StaveNote({
+             let newNote = new VexFlow.StaveNote({
                  keys: newKeys,
                  duration: duration,
                  
              });
+
              newNote.dots = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].dots
              if (newNote.dots == 1) {
                 VF.Dot.buildAndAttach([newNote], {all: true})
-
             }
              e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex] = newNote;
 
@@ -222,32 +225,9 @@ svg.addEventListener('chordClick', (e) => {
     console.log(`Geklickter Akkord: ${e.detail.chord} (Index: ${e.detail.chordPosition})`);
 });
 
-// Funktion zum Zurücksetzen des globalen Zählers (nicht mehr benötigt, aber für Kompatibilität beibehalten)
-function resetGlobalChordCounter() {
-    // Leer, da globalChordCounter entfernt wurde
-}
-
 // Funktion bleibt unverändert
 function removeRedundantAccidentals(notes, keySignature) {
-    const keySignatureAccidentals = {
-        'Cb': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b', 'C': 'b', 'F': 'b' },
-        'Gb': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b', 'C': 'b' },
-        'Db': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b' },
-        'Ab': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b' },
-        'Eb': { 'B': 'b', 'E': 'b', 'A': 'b' },
-        'Bb': { 'B': 'b', 'E': 'b' },
-        'F': { 'B': 'b' },
-        'C': {},
-        'G': { 'F': '#' },
-        'D': { 'F': '#', 'C': '#' },
-        'A': { 'F': '#', 'C': '#', 'G': '#' },
-        'E': { 'F': '#', 'C': '#', 'G': '#', 'D': '#' },
-        'B': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#' },
-        'F#': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#', 'E': '#' },
-        'C#': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#', 'E': '#', 'B': '#' }
-    };
-
-    const keyAccidentals = keySignatureAccidentals[keySignature] || {};
+    const keyAccidentals = {};
 
     return notes.map(note => {
         const newKeys = note.getKeys().map(key => {
@@ -261,6 +241,7 @@ function removeRedundantAccidentals(notes, keySignature) {
             }
             return key;
         });
+
         if (note.isRest()) {
             const duration = note.getDuration();
             const finalDuration = duration.includes("r") ? duration : duration + "r";
@@ -285,7 +266,6 @@ function removeRedundantAccidentals(notes, keySignature) {
 
         if (newNote.dots == 1) {
              VF.Dot.buildAndAttach([newNote], {all: true})
-
         }
         return newNote
 
@@ -356,6 +336,175 @@ function addDotted(notes) {
     
     return notes
 }
+
+
+function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
+    function checkTupletIndex(index) {
+        for (let i = 0; measureIndex < tupletsIndeces.length && i < tupletsIndeces[measureIndex].length; ++i) {
+            if (tupletsIndeces[measureIndex][i][1] == index && tupletsIndeces[measureIndex][i][0] == measureIndex) {
+                return tupletsIndeces[measureIndex][i];
+            }
+        }
+        return false
+    }
+
+    function ticksToDuration(ticks) {
+        const durations = {
+            16384: "w",    // Ganze Note (4 Viertel)
+            12288: "hd",   // Punktierte halbe Note (3 Viertel)
+            8192: "h",     // Halbe Note (2 Viertel)
+            6144: "qd",    // Punktierte Viertelnote (1.5 Viertel)
+            4096: "q",     // Viertelnote (1 Viertel)
+            3072: "8d",    // Punktierte Achtelnote (0.75 Viertel)
+            2048: "8",     // Achtelnote (0.5 Viertel)
+            1536: "16d",   // Punktierte Sechzehntelnote (0.375 Viertel)
+            1024: "16",    // Sechzehntelnote (0.25 Viertel)
+            768: "32d",    // Punktierte Zweiunddreißigstelnote (0.1875 Viertel)
+            512: "32",     // Zweiunddreißigstelnote (0.125 Viertel)
+        };
+        // Finde die nächstgelegene Dauer
+        let closestDuration = "q";
+        let minDiff = Infinity;
+        for (const [tickValue, duration] of Object.entries(durations)) {
+            const diff = Math.abs(ticks - tickValue);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestDuration = duration;
+            }
+        }
+        return closestDuration;
+    }
+
+    let restGroups = [];
+    let isRestStart = false;
+    
+    // Gruppieren von Pausen und Noten
+    let tubletGroups = []
+    for (let i = 0; i < notes.length; ++i) {
+        let startTupletCount = 0
+        let oneNoteInTuplet = false;
+
+        for (let j = i; j < 3 && i < notes.length; ++j) {
+            if (checkTupletIndex(j)) {
+                startTupletCount += 1;
+                if (!notes[j].isRest()) {
+                    oneNoteInTuplet = true;
+                }
+            }
+        }
+
+        if (startTupletCount === 3 && oneNoteInTuplet) {
+            for (let j = i; j < 3 && i < notes.length; ++j) {
+                restGroups.push([{ note: notes[j], index: j}]);
+            }
+            i += 2;
+            continue;
+        }
+
+        if (notes[i].isRest()) {
+            if (!isRestStart) {
+                isRestStart = true;
+                restGroups.push([]);
+            }
+            if (checkTupletIndex(i)) {
+                stopRestGroupAtIndex = i + 3;
+                for (let j = 0; j < 3; ++j) {
+                    restGroups[restGroups.length - 1].push({ note: notes[i], index: i, tupletIndex: checkTupletIndex(i)[1]});
+                }
+                i += 2;
+                continue;
+            }
+
+            restGroups[restGroups.length - 1].push({ note: notes[i], index: i});
+        } else {
+            isRestStart = false;
+            restGroups.push([{ note: notes[i], index: i }]);
+            stopRestGroupAtIndex = -1;
+        }
+    }
+
+    let newNotes = [];
+    let newTupletIndeces = JSON.parse(JSON.stringify(tupletsIndeces))
+
+    for (let i = 0; i < restGroups.length; ++i) {
+        let group = restGroups[i];
+
+        if (group.length === 1) {
+            // Einzelne Note oder Pause
+            newNotes.push(group[0].note);
+        } else {
+            // Kombinieren von Pausen
+            let combinedTicks = 0;
+            for (let j = 0; j < group.length; ++j) {
+                let item = group[j];
+                
+                let startTupletCount = 0
+
+                for (let k = j; k < 3 && k < group.length; ++k) {
+                    if (group[k].hasOwnProperty("tupletIndex")) {
+                        startTupletCount += 1; 
+                    } else {
+                        break;
+                    }
+                            
+                }
+
+                if (startTupletCount === 3) {
+                    combinedTicks += item.note.getTicks().value() * 2;
+                    
+                    if (item.hasOwnProperty("tupletIndex")) {
+                        newTupletIndeces[measureIndex].splice(item.tupletIndex, 3); 
+                    }
+                    
+                    j += 2;
+                    continue
+                }
+                combinedTicks += item.note.getTicks().value();
+            }
+            const combinedDuration = ticksToDuration(combinedTicks);
+            // Erstelle eine neue StaveNote mit der korrekten Dauer
+            const newRest = new VexFlow.StaveNote({
+                clef: group[0].note.clef,
+                keys: group[0].note.getKeys(),
+                duration: combinedDuration + "r" // Sicherstellen, dass es eine Pause ist
+            });
+            if (combinedDuration.includes("d")) {
+                VexFlow.Dot.buildAndAttach([newRest], { all: true });
+            }
+            newNotes.push(newRest);
+        }
+    }
+
+    return {newNotes: newNotes, newTupletIndeces: newTupletIndeces};
+}
+
+
+function createTupletGroups(tupletsIndeces, measureIndex, notes) {
+    let counter = 0;
+    let tupletGroups = []
+
+    let indecesTuples = []
+
+    for (let i = 0; i < tupletsIndeces.length; ++i) {
+        for (let j = 0; j < tupletsIndeces[i].length; ++j) {
+            if (tupletsIndeces[i][j][0] != measureIndex) {
+                continue
+            }
+            if (counter == 0 ) {
+                tupletGroups.push([])
+            }
+            
+            tupletGroups.at(-1).push(notes[tupletsIndeces[i][j][1]])
+            indecesTuples.push(tupletsIndeces[i][j][1])
+
+            counter += 1; 
+            if (counter == 3 ) {
+                counter = 0
+            }
+        }
+    }
+    return tupletGroups;
+}
 // Angepasste renderOneMeasure-Funktion
 function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData) {
     const keySignatureMap = {
@@ -404,54 +553,51 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         return note;
     });
 
-    let processedTrebleNotes = applyAccidentals(annotatedTrebleNotes, keySignature);
-    let processedBassNotes = applyAccidentals(bassStaveNotes, keySignature);
+    let processedTrebleNotes = annotatedTrebleNotes.map((note, noteIndex) => {
+        let lastAddedVoicingIndex = -1;
+        for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
+            if (JSON.stringify(allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([lineIndex, measureIndex , noteIndex])) {
+                lastAddedVoicingIndex = allData.addedVoicingsIndeces[i][3];
+            }
+        }
+
+        if (!note.isRest()) {
+            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][1] : [originalData[measureIndex][noteIndex].oneNote], note)
+        }
+        return note;
+    });
+
+    let processedBassNotes = bassStaveNotes.map((note, noteIndex) => {
+        let lastAddedVoicingIndex = -1;
+        for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
+            if (JSON.stringify(allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([lineIndex, measureIndex , noteIndex])) {
+                lastAddedVoicingIndex = allData.addedVoicingsIndeces[i][3];
+            }
+        }
+
+        if (!note.isRest()) {
+            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][0] : [originalData[measureIndex][noteIndex].oneNote], note)
+        }
+        return note;
+    });
+
+    let combineResult  = combineRests(processedBassNotes, allData.tupletsIndeces,  measureIndex + lineIndex * 3);
+    const bassTupletIndeces = combineResult.newTupletIndeces;
+    processedBassNotes =  combineResult.newNotes;
 
     processedTrebleNotes = addDotted(processedTrebleNotes)
     processedBassNotes = addDotted(processedBassNotes)
 
-    // Helper function to check if a group is beamable
-    function isBeamableGroup(group) {
-        return group.every(note => {
-            const duration = note.getDuration();
-            const isRest = note.isRest() || duration.includes('r');
-            const baseDuration = duration.replace(/[dwhqr]/g, '');
-            return !isRest && ['8', '16', '32', '64'].includes(baseDuration);
-        });
-    }
     // Integrate NoteGrouper for treble notes
     
-    let counter = 0;
-    let trebleNoteTupletGroups = []
-    let bassNoteTupletGroups = []
+    const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * 3, processedTrebleNotes);
 
-    let indecesTuples = []
-
-    for (let i = 0; i < allData.tupletsIndeces.length; ++i) {
-        for (let j = 0; j < allData.tupletsIndeces[i].length; ++j) {
-            if (allData.tupletsIndeces[i][j][0] != measureIndex + lineIndex * 3) {
-                continue
-            }
-            if (counter == 0 ) {
-                trebleNoteTupletGroups.push([])
-                bassNoteTupletGroups.push([])
-            }
-            
-            trebleNoteTupletGroups.at(-1).push(processedTrebleNotes[allData.tupletsIndeces[i][j][1]])
-            bassNoteTupletGroups.at(-1).push(processedBassNotes[allData.tupletsIndeces[i][j][1]])
-            indecesTuples.push(allData.tupletsIndeces[i][j][1])
-
-            counter += 1; 
-            if (counter == 3 ) {
-                counter = 0
-            }
-        }
-    }
-    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, indecesTuples), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
-    const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, indecesTuples), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * 3, processedBassNotes)
+    const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     const trebleVoice = new Voice({ num_beats: 4, beat_value: 4 });
@@ -547,12 +693,9 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < 3; ++i) {
         musicElements.push([
-            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }),
-            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }),
-            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }),
-            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" })
+            new StaveNote({ clef: "treble", keys: ["b/4"], duration: "wr" })
         ]);
-        chordNames.push(["Unknown chord", "Unknown chord", "Unknown chord", "Unknown chord"]);
+        chordNames.push(["Unknown chord"]);
     }
 
     // Erstelle Bass-Noten (Pausen) für jeden Takt
@@ -579,11 +722,9 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
             
         for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
             for (let j = 0; j < musicElementsBase.length; ++j) { 
-                
                 for (let k = 0; k < musicElementsBase[j].length; ++k) {
                     const voicingsIndeces = allData.addedVoicingsIndeces[i];
                     if (allData.addedVoicingsIndeces[i][0] == lineIndex && allData.addedVoicingsIndeces[i][1] == j && allData.addedVoicingsIndeces[i][2] == k) {
-                        console.log(allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]], voicingsIndeces[0], voicingsIndeces[1], voicingsIndeces[2], voicingsIndeces[3])
                         if (allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0].length > 0) {
                             usedVoicings.push(allData.voicings[voicingsIndeces[0]][voicingsIndeces[1]][voicingsIndeces[2]][voicingsIndeces[3]][0]);
                             musicElementsIndeces.push([j, k])
@@ -608,20 +749,19 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
             const duration = musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].getDuration().replace("r", "");
 
             // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
-            const newNote = new VexFlow.StaveNote({
+            let newNote = new VexFlow.StaveNote({
                 keys: newKeys,
                 duration: duration,
                 clef: "bass",
             });
+
             newNote.dots = musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].dots
 
             if (newNote.dots == 1) {
                 VF.Dot.buildAndAttach([newNote], {all: true});
             }
             musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]] = newNote;
-        }
-            //e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, 0]);
-               
+        }               
     }
     const leftOffset = 5;
     renderOneMeasure(musicElementsBase[0], musicElements[0], 0 + leftOffset, yOffset, true, keySign, chordNames[0], allData, 0, lineIndex, originalData);

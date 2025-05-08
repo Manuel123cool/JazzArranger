@@ -8,7 +8,7 @@
     <creator type="composer">Komponist / Arrangeur</creator>
     <encoding>
       <software>MuseScore 4.4.3</software>
-      <encoding-date>2025-04-27</encoding-date>
+      <encoding-date>2025-05-03</encoding-date>
       <supports element="accidental" type="yes"/>
       <supports element="beam" type="yes"/>
       <supports element="print" attribute="new-page" type="no"/>
@@ -99,7 +99,7 @@
         <root>
           <root-step>E</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -151,7 +151,7 @@
         <root>
           <root-step>A</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -264,7 +264,7 @@
         <root>
           <root-step>E</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -316,7 +316,7 @@
         <root>
           <root-step>A</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -389,7 +389,7 @@
         <root>
           <root-step>E</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -457,7 +457,7 @@
         <root>
           <root-step>B</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -519,7 +519,7 @@
           <root-step>B</root-step>
           <root-alter>-1</root-alter>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -538,7 +538,7 @@
         <root>
           <root-step>A</root-step>
           </root>
-        <kind text="7" use-symbols="yes">minor-seventh</kind>
+        <kind use-symbols="yes">minor-seventh</kind>
         </harmony>
       <note>
         <pitch>
@@ -647,10 +647,34 @@
         </note>
       </measure>
     <measure number="9">
+      <harmony print-frame="no">
+        <root>
+          <root-step>D</root-step>
+          </root>
+        <kind use-symbols="yes">minor-seventh</kind>
+        </harmony>
       <note>
-        <rest measure="yes"/>
-        <duration>8</duration>
+        <pitch>
+          <step>F</step>
+          <octave>4</octave>
+          </pitch>
+        <duration>2</duration>
         <voice>1</voice>
+        <type>quarter</type>
+        <accidental>natural</accidental>
+        <stem>up</stem>
+        </note>
+      <note>
+        <rest/>
+        <duration>2</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        </note>
+      <note>
+        <rest/>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>half</type>
         </note>
       </measure>
     <measure number="10">

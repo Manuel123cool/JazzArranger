@@ -10,7 +10,6 @@ function convertToVexFlowKeyVoicing(oneNote) {
 }
 
   function convertToVexFlowKey(relative_to_key, note_key, octave, isRest) {
-    console.log(relative_to_key, note_key, octave, isRest)
     const key = relative_to_key ? relative_to_key : note_key
     
     if (isRest) {
@@ -41,14 +40,23 @@ function convertToVexFlowKeyVoicing(oneNote) {
         0.25: '16',  // Sechzehntelnote
         0.125: '32'  // Zweiunddreißigstelnote
     };
-    if (JSON.stringify(music21Duration).includes("numerator")) {
-
-      return "8";
-    }
     return durationMap[music21Duration] || 'q'; // Default: Viertelnote
 }
 
-  function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) {
+function addAccidental(notes, noteVF) {
+  for (let i = 0; i < noteVF.keys.length; ++i) {
+    if (noteVF.keys[i].includes("#")) {
+      noteVF.addModifier(new VF.Accidental("#"), i);
+    } else if (noteVF.keys[i].includes("b")) {
+      noteVF.addModifier(new VF.Accidental("b"), i);
+    } else if (notes[i].is_natural) {
+        noteVF.addModifier(new VF.Accidental('n'), i);
+    }
+  }
+  return noteVF;
+}
+
+function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) {
 
     let staffNotesMeasures = []
     jsonData.forEach((measure, indexMeasure) => {
@@ -61,37 +69,26 @@ function convertToVexFlowKeyVoicing(oneNote) {
           if (voicings[indexMeasure][index].length > 0) {
             jsonData.forEach((measure, indexDsonData) => {
                   measure.forEach( (element, indexDsonData1) => {
-                    if (Object.hasOwn(element, 'voicingIndex') && indexDsonData == indexMeasure && indexDsonData1 == index) {
+                    if (Object.hasOwn(element, 'voicingIndex') && element.voicingIndex != -1 && indexDsonData == indexMeasure && indexDsonData1 == index) {
                       voicingIndex = element.voicingIndex;
                     }  
 
                 })
             })
           }
-          if (voicingIndex != null) {
+          if (voicingIndex != null ) {
             keys = []
             for (let i = 0; i < voicings[indexMeasure][index][voicingIndex][1].length; ++i) {
               const voicingNote = voicings[indexMeasure][index][voicingIndex][1][i];
-              console.log("hier", voicingNote)
               keys.push(convertToVexFlowKey(voicingNote.relative_to_key, voicingNote.note_key, voicingNote.octave, voicingNote.is_rest))
             }
           }
           let duration = music21ToVexflowDuration(element.oneNote.duration)
-          
-          console.log(keys, element.oneNote.duration, )
-          const note = new VF.StaveNote({
+          let note = new VF.StaveNote({
             keys: keys,
             duration: (duration + (element.oneNote.is_rest ? "r" : "")),
             clef: "treble", 
           });
-
-          const isFlat = note.keys[0].split("/")[0].length == 2 && note.keys[0][1] == "b"
-
-          if (note.keys[0].includes("#")) {
-            note.addModifier(new VF.Accidental("#"), index);
-          } else if (isFlat) {
-            note.addModifier(new VF.Accidental("b"), index);
-          }
 
           if (duration.includes("d")) {
             note.dots = 1
