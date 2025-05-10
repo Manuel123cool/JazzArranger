@@ -52,6 +52,15 @@
             border: 1px solid #ccc;
             padding: 10px;
         }
+        .delete-btn {
+            background-color: #ff4444;
+            padding: 5px 10px;
+            margin-left: 10px;
+            font-size: 0.8em;
+        }
+        .delete-btn:hover {
+            background-color: #cc0000;
+        }
     </style>
 </head>
 <body>
@@ -136,6 +145,12 @@
             <h4>Manage Categories</h4>
             <input type="text" id="newCategoryInput" placeholder="Enter new category name">
             <button onclick="addNewCategory()">Add New Category</button>
+
+            
+            <div id="category-delete">
+                <button onclick="deleteCategoryField()" class="remove-btn">Delete Category</button>
+                <select class="category-select" id="category2"></select>
+            </div>
         </div>
 
         <button onclick="saveVoicing()">Save Voicing</button>
@@ -147,11 +162,13 @@
     </div>
 
     <script>
-        const notesWithFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+        const notesWithFlat = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B", "ANY"];
         let savedVoicings = [];
         let categories = []; // Standardkategorien
         const maxNotesPerHand = 5;
         const maxCategories = 5;
+        let categoriesIds = [];
+        let currentLoadVoicingId = -1;
 
         function removeOptions(selectElement) {
             var i, L = selectElement.options.length - 1;
@@ -164,7 +181,7 @@
         function populateNoteDropdowns() {
             const noteSelects = document.querySelectorAll('.note-select');
             noteSelects.forEach(select => {
-                if (select.options.length != 12) {
+                if (select.options.length != 13) {
                     removeOptions(select)
                     notesWithFlat.forEach(note => {
                         const option = document.createElement('option');
@@ -180,15 +197,13 @@
         function populateCategoryDropdowns() {
             const categorySelects = document.querySelectorAll('.category-select');
             categorySelects.forEach(select => {
-                if (select.options.length != categories.length) {
-                        removeOptions(select)
-                        categories.forEach(category => {
-                        const option = document.createElement('option');
-                        option.value = category;
-                        option.text = category;
-                        select.appendChild(option);
-                    });
-                }
+                    removeOptions(select)
+                    categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.text = category;
+                    select.appendChild(option);
+                });
             });
         }
 
@@ -261,7 +276,12 @@
             const newCategory = newCategoryInput.value.trim();
 
             if (newCategory && !categories.includes(newCategory)) {
-                categories.push(newCategory);
+                postCategory(newCategory);
+                if (categories.length > 0) {
+                    categories.splice(-1, 0, newCategory)
+                } else {
+                    categories.push(newCategory);
+                }
                 newCategoryInput.value = '';
                 populateCategoryDropdowns();
                 alert(`Category "${newCategory}" added.`);
@@ -278,7 +298,8 @@
                 leftHand: [],
                 rightHand: [],
                 impliedNotes: [],
-                categories: []
+                categories: [],
+                categoriesIds: []
             };
 
             // Get left hand notes and octaves
@@ -314,15 +335,28 @@
             // Get categories
             const categoryInputs = document.getElementById('categoryInputs').querySelectorAll('.category-select');
             const uniqueCategories = new Set();
+            const uniqueCategoriesIds = new Set();
             categoryInputs.forEach(input => {
                 if (input.value) {
                     uniqueCategories.add(input.value);
+                    for (const [index, categorie] of categories.entries()) {
+                        if (categorie == input.value) {
+                            uniqueCategoriesIds.add(categoriesIds[index]); // Hier ist der Index verfügbar
+                            break;
+                        }
+                    }
                 }
             });
             voicing.categories = Array.from(uniqueCategories);
-
-            postVoicing(voicing);
-
+            voicing.categoriesIds = Array.from(uniqueCategoriesIds);
+            
+            if (currentLoadVoicingId === -1) {
+                postVoicing(voicing);
+            } else {
+                putVoicing(voicing, currentLoadVoicingId)
+                currentLoadVoicingId = -1;
+            }
+            
             if (voicing.leftHand.length > 0 || voicing.rightHand.length > 0) {
                 if (voicing.categories.length > 0) {
                     savedVoicings.push(voicing);
@@ -338,23 +372,38 @@
 
 
         // Update the list of saved voicings by category
+        async function deleteVoicing(voicingId) {
+                try {
+                    const response = await fetch(`/deleteVoicing/${voicingId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!response.ok) throw new Error('Löschen fehlgeschlagen');
+                     getVoicings(); // Liste aktualisieren
+                } catch (error) {
+                    console.error('Fehler beim Löschen:', error);
+                }
+            }
+
         function updateVoicingList() {
             const categorizedVoicingsDiv = document.getElementById('categorizedVoicings');
             categorizedVoicingsDiv.innerHTML = '';
 
-            // Gruppiere Voicings nach Kategorien
             const voicingsByCategory = {};
             categories.forEach(category => {
                 voicingsByCategory[category] = [];
             });
 
-            savedVoicings.forEach((voicing, index) => {
-                voicing.categories.forEach(category => {
-                    voicingsByCategory[category].push({ voicing, index });
-                });
+            savedVoicings.forEach(voicing => {
+                if (voicing.categories.length > 0) {
+                    voicing.categories.forEach((category) => {
+                        voicingsByCategory[category].push(voicing);
+                    });
+                } else {
+                    voicingsByCategory["No Category"].push(voicing);
+                }
             });
 
-            // Zeige Voicings nach Kategorien an
             categories.forEach(category => {
                 if (voicingsByCategory[category].length > 0) {
                     const categoryDiv = document.createElement('div');
@@ -362,9 +411,15 @@
                     categoryDiv.innerHTML = `<h5>${category}</h5>`;
                     const ul = document.createElement('ul');
 
-                    voicingsByCategory[category].forEach(({ voicing, index }) => {
+                    voicingsByCategory[category].forEach(voicing => {
                         const li = document.createElement('li');
-                        li.textContent = `Voicing ${index + 1}: Left Hand - [${voicing.leftHand.join(', ')}], Right Hand - [${voicing.rightHand.join(', ')}], Implied Notes - [${voicing.impliedNotes.join(', ')}]`;
+                        li.innerHTML = `
+                            ${voicing.leftHand.join(', ')} | 
+                            ${voicing.rightHand.join(', ')} | 
+                            Implied: ${voicing.impliedNotes.join(', ')}
+                            <button class="delete-btn" onclick="deleteVoicing(${voicing.id})">Löschen</button>
+                            <button class="load-btn" onclick="loadVoicing(${voicing.id})">Load</button>
+                        `;
                         ul.appendChild(li);
                     });
 
@@ -388,6 +443,7 @@
         // Initialize the dropdowns on page load
         
         async function postVoicing(voicingParam) {
+            console.log(voicingParam)
             const url = "/voicing";
             try {
                 const response = await fetch(url, {
@@ -402,6 +458,29 @@
                 }
 
                 const json = await response.json();
+                getVoicings();
+            } catch (error) {
+                console.error(error.message);
+            }
+        }
+
+        async function putVoicing(voicingParam, voicingId) {
+            console.log(voicingParam)
+            const url = "/voicing/" + voicingId;
+            try {
+                const response = await fetch(url, {
+                    method: "PUT",
+                    body: JSON.stringify({"voicing": voicingParam}),
+                    headers: { 
+                        "Content-Type": "application/json" // 🠐- Wichtig!
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error(`Response status: ${response.status}`);
+                }
+
+                const json = await response.json();
+                getVoicings();
             } catch (error) {
                 console.error(error.message);
             }
@@ -410,18 +489,43 @@
         async function getVoicings() {
             const url = "/voicings";
             try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Response status: ${response.status}`);
+                const responseResult = await response.json();
+                console.log(responseResult)
+                // Kombiniere Voicings mit ihren IDs
+                savedVoicings = responseResult.voicings.map((voicing, index) => ({
+                    ...voicing,
+                    id: responseResult.voicingsIds[index]
+                }));
+                categories = [...responseResult.categories, "No Category"];
+                categoriesIds = responseResult.categoriesIds;
+                
+                updateVoicingList();
+                populateNoteDropdowns();
+                populateCategoryDropdowns();
+            } catch (error) {
+                console.error(error.message);
+            }
+        }
+
+        async function postCategory(categoryName) {
+            const url = "/categories";
+            try {
                 const response = await fetch(url, {
-                    method: "GET",
+                    method: "POST",
+                    body: JSON.stringify({"categoryName": categoryName}),
+                    headers: { 
+                        "Content-Type": "application/json" // 🠐- Wichtig!
+                    },
                 });
                 if (!response.ok) {
                     throw new Error(`Response status: ${response.status}`);
                 }
-                const responseResult = await response.json();
-                console.log(responseResult);
-                savedVoicings = responseResult.voicings;
-                categories = responseResult.categories;
-                console.log(savedVoicings);
-                updateVoicingList();
+
+                const json = await response.json();
+                categoriesIds.push(json.result_id);
+                console.log(categoriesIds, json)
             } catch (error) {
                 console.error(error.message);
             }
@@ -448,10 +552,85 @@
             populateCategoryDropdowns();
         }
 
+        async function deleteCategoryField() {
+            const categoryInputs = document.getElementById('category-delete').querySelectorAll('.category-select');
+            let selectedCategoryFieldId = -1;
+            categoryInputs.forEach(input => {
+                if (input.value) {
+                    for (const [index, categorie] of categories.entries()) {
+                        if (categorie == input.value) {
+                            selectedCategoryFieldId = categoriesIds[index];
+                            break;
+                        }
+                    }
+                }
+            });
+            const url = "/deleteCategory/" + selectedCategoryFieldId;
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json" // 🠐- Wichtig!
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error(`Response status: ${response.status}`);
+                }
+
+                const json = await response.json();
+                getVoicings();
+            } catch (error) {
+                console.error(error.message);
+            }
+            
+        }
+        
+        function loadVoicing(voicingId) {
+            currentLoadVoicingId = voicingId;
+
+            document.getElementById("leftHandInputs").innerHTML = "";
+            document.getElementById("rightHandInputs").innerHTML = "";
+            document.getElementById("impliedNotesInputs").innerHTML = "";
+            document.getElementById("categoryInputs").innerHTML = "";
+
+            savedVoicings.forEach(voicing => {
+                voicing.leftHand.forEach(note => {
+                    addNoteField('left');
+                    const elementsNoteSelect = document.querySelectorAll('#leftHandInputs .note-select');
+                    const elementsOctaveSelect = document.querySelectorAll('#leftHandInputs .octave-select');
+
+                    elementsNoteSelect[elementsNoteSelect.length - 1].value = note.replace(note.at(-1), "");
+                    elementsOctaveSelect[elementsOctaveSelect.length - 1].value = note.at(-1);
+                });
+
+                voicing.rightHand.forEach(note => {
+                    addNoteField('right');
+                    const elementsNoteSelect = document.querySelectorAll('#rightHandInputs .note-select');
+                    const elementsOctaveSelect = document.querySelectorAll('#rightHandInputs .octave-select');
+
+                    elementsNoteSelect[elementsNoteSelect.length - 1].value = note.replace(note.at(-1), "");
+                    elementsOctaveSelect[elementsOctaveSelect.length - 1].value = note.at(-1);
+                });
+
+                voicing.impliedNotes.forEach(note => {
+                    addNoteField('implied');
+                    const elementsNoteSelect = document.querySelectorAll('#impliedNotesInputs .note-select');
+                    const elementsOctaveSelect = document.querySelectorAll('#impliedNotesInputs .octave-select');
+
+                    elementsNoteSelect[elementsNoteSelect.length - 1].value = note.replace(note.at(-1), "");
+                    elementsOctaveSelect[elementsOctaveSelect.length - 1].value = note.at(-1);
+                });
+
+                voicing.categories.forEach(category => {
+                    const elementsCategorySelect = document.querySelectorAll('#categoryInputs .category-select');
+
+                    elementsCategorySelect[elementsCategorySelect.length - 1].value = category;
+                });
+            });
+        }
+
         window.onload = function() {
             getVoicings();
-            populateNoteDropdowns();
-            populateCategoryDropdowns();
         };
     </script>
 </body>

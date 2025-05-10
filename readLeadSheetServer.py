@@ -171,7 +171,7 @@ import json
 import sys
 from voicings import voicings
 
-def is_sharp(note_list, keySign):
+def is_sharp(note_list):
     if not(note_list):
         return None
     #note_list = chord.Chord(["B-4", "D5", "F5", "A5"])
@@ -187,8 +187,6 @@ def is_sharp(note_list, keySign):
             for n in note_list:
                 if p.midi % 12 == n.pitch.midi % 12:
                     newCount += 1
-                    if keySign == sharps:
-                        return (True, sharps)
 
         if newCount >= len(note_list):
             allSharpKey.append(sharps)
@@ -202,8 +200,6 @@ def is_sharp(note_list, keySign):
             for n in note_list:
                 if p.midi % 12 == n.pitch.midi % 12:
                     newCount += 1
-                    if keySign == flats:
-                        return (False, flats)
 
         if newCount >= len(note_list):
             allFlatKey.append(flats)
@@ -220,11 +216,11 @@ def is_sharp(note_list, keySign):
         countNoAccidentals += 1
 
     if len(allSharpKey) > len(allFlatKey) and len(allSharpKey) > countNoAccidentals:
-        return (True, allSharpKey[randrange(0, len(allSharpKey))])
+        return True
     elif len(allFlatKey) > len(allSharpKey) and len(allFlatKey) > countNoAccidentals:
-        return (False, allFlatKey[randrange(0, len(allFlatKey))])
+        return False
     else:
-        return (None, 0)
+        return None
 
 def adjust_chord_to_key(chord_obj, use_sharps=True):
     """
@@ -248,8 +244,8 @@ def relativeKeysOfVoicing(voicing, keySign, definingNotes):
     notes2 = [note.Note(n) for n in voicing[1]]
     definingNotes = [note.Note(n) for n in definingNotes]
 
-    reVoicing[0] = adjust_chord_to_key(notes1, is_sharp(definingNotes, keySign)[0])
-    reVoicing[1] = adjust_chord_to_key(notes2, is_sharp(definingNotes, keySign)[0])
+    reVoicing[0] = adjust_chord_to_key(notes1, is_sharp(definingNotes))
+    reVoicing[1] = adjust_chord_to_key(notes2, is_sharp(definingNotes))
     
     for index, n in enumerate(reVoicing[0]):
         reVoicing[0][index] = (getRelativeNoteToKey(n, keySign)[0].nameWithOctave, getRelativeNoteToKey(n, keySign)[1].value)

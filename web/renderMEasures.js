@@ -20,7 +20,7 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
                 counter += 1;
                 continueVar = true
             }
-            if (indecesTubles[j] == i && counter == 0) {
+            if (indecesTubles[j].length > 0 && indecesTubles[j] == i && counter == 0) {
                 noLongerThanEights.push(-1);
                 noLongerThanEights.push(-1);
 
@@ -339,6 +339,21 @@ function addDotted(notes) {
 
 
 function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
+
+    const durations = {
+        16384: "w",    // Ganze Note (4 Viertel)
+        12288: "hd",   // Punktierte halbe Note (3 Viertel)
+        8192: "h",     // Halbe Note (2 Viertel)
+        6144: "qd",    // Punktierte Viertelnote (1.5 Viertel)
+        4096: "q",     // Viertelnote (1 Viertel)
+        3072: "8d",    // Punktierte Achtelnote (0.75 Viertel)
+        2048: "8",     // Achtelnote (0.5 Viertel)
+        1536: "16d",   // Punktierte Sechzehntelnote (0.375 Viertel)
+        1024: "16",    // Sechzehntelnote (0.25 Viertel)
+        768: "32d",    // Punktierte Zweiunddreißigstelnote (0.1875 Viertel)
+        512: "32",     // Zweiunddreißigstelnote (0.125 Viertel)
+    };
+
     function checkTupletIndex(index) {
         for (let i = 0; measureIndex < tupletsIndeces.length && i < tupletsIndeces[measureIndex].length; ++i) {
             if (tupletsIndeces[measureIndex][i][1] == index && tupletsIndeces[measureIndex][i][0] == measureIndex) {
@@ -348,31 +363,39 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
         return false
     }
 
+    function getNextSmallerDuration(currentKey) {
+        const keys = Object.keys(durations).map(Number).sort((a, b) => b - a);
+        const current = Number(currentKey);
+        const index = keys.indexOf(current);
+        
+        if (index === -1 || index === keys.length - 1) {
+            return null; // Schlüssel nicht gefunden oder kein kleinerer vorhanden
+        }
+        return keys[index + 1];
+    }
+
     function ticksToDuration(ticks) {
-        const durations = {
-            16384: "w",    // Ganze Note (4 Viertel)
-            12288: "hd",   // Punktierte halbe Note (3 Viertel)
-            8192: "h",     // Halbe Note (2 Viertel)
-            6144: "qd",    // Punktierte Viertelnote (1.5 Viertel)
-            4096: "q",     // Viertelnote (1 Viertel)
-            3072: "8d",    // Punktierte Achtelnote (0.75 Viertel)
-            2048: "8",     // Achtelnote (0.5 Viertel)
-            1536: "16d",   // Punktierte Sechzehntelnote (0.375 Viertel)
-            1024: "16",    // Sechzehntelnote (0.25 Viertel)
-            768: "32d",    // Punktierte Zweiunddreißigstelnote (0.1875 Viertel)
-            512: "32",     // Zweiunddreißigstelnote (0.125 Viertel)
-        };
         // Finde die nächstgelegene Dauer
         let closestDuration = "q";
         let minDiff = Infinity;
+        let equalDuration = null;
+        let closestDurationTicks = -1;
+
         for (const [tickValue, duration] of Object.entries(durations)) {
+            if (ticks - tickValue < 0) {
+                continue;
+            }
             const diff = Math.abs(ticks - tickValue);
-            if (diff < minDiff) {
+            if (diff <= minDiff) {
                 minDiff = diff;
                 closestDuration = duration;
+                closestDurationTicks = tickValue
+            }
+            if (diff === 0) {
+                equalDuration = duration;
             }
         }
-        return closestDuration;
+        return {"closestDuration": closestDuration, "equalDuration": equalDuration, "closestDurationTicks": closestDurationTicks};
     }
 
     let restGroups = [];
@@ -461,17 +484,30 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
                 }
                 combinedTicks += item.note.getTicks().value();
             }
-            const combinedDuration = ticksToDuration(combinedTicks);
             // Erstelle eine neue StaveNote mit der korrekten Dauer
-            const newRest = new VexFlow.StaveNote({
-                clef: group[0].note.clef,
-                keys: group[0].note.getKeys(),
-                duration: combinedDuration + "r" // Sicherstellen, dass es eine Pause ist
-            });
-            if (combinedDuration.includes("d")) {
-                VexFlow.Dot.buildAndAttach([newRest], { all: true });
-            }
-            newNotes.push(newRest);
+            //{"closestDuration": closestDuration, "equalDuration": equalDuration}
+            let durationObj = ticksToDuration(combinedTicks);
+            let currentDurationObj = durationObj;
+            let remainingTicks = combinedTicks;
+            do  {
+                const newRest = new VexFlow.StaveNote({
+                    clef: group[0].note.clef,
+                    keys: group[0].note.getKeys(),
+                    duration: currentDurationObj.closestDuration + "r" // Sicherstellen, dass es eine Pause ist
+                });
+                if (currentDurationObj.closestDuration.includes("d")) {
+                    VexFlow.Dot.buildAndAttach([newRest], { all: true });
+                }
+                newNotes.push(newRest);
+                remainingTicks = remainingTicks - newRest.getTicks().value();
+
+                if (remainingTicks !== 0) {
+                    currentDurationObj = ticksToDuration(remainingTicks)
+                    while (currentDurationObj.equalDuration === null) {
+                        currentDurationObj = ticksToDuration(getNextSmallerDuration(currentDurationObj.closestDurationTicks))
+                    }
+                }
+            } while (remainingTicks !== 0)
         }
     }
 

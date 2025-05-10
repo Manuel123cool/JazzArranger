@@ -10,6 +10,7 @@ const util = require('util');
 const { Client } = require('pg');
 require('dotenv').config()
 const format = require('pg-format');
+const { json } = require('stream/consumers');
 
 console.log(process.env.DB_PSW)
 
@@ -476,20 +477,19 @@ class DB {
         return voicingRes.rows[0].voicing_id;
     }
 
-    async insertVoicingCategory(categoryName, voicingId) {
-        const categoryRes = await this.client.query(
+    async insertVoicingCategory(categoryId, voicingId) {
+        /* const categoryRes = await this.client.query(
             'INSERT INTO voicing_category (category_name) VALUES ($1) RETURNING voicing_category_id',
             [categoryName]
         );
-
+ */
         const categoryConnectionRes = await this.client.query(
             'INSERT INTO voicing_category_connection (voicing_id, voicing_category_id) VALUES ($1, $2)',
-            [voicingId, categoryRes.rows[0].voicing_category_id]
+            [voicingId, categoryId]
         );
     }
       
     async getVoicings() {
-        console.log(1)
         const resultNotes = await this.client.query(`
             SELECT v.voicing_id, 
                     json_agg(n.*) as notes,
@@ -500,16 +500,13 @@ class DB {
             JOIN note n ON nve.note_id = n.note_id
             GROUP BY v.voicing_id
         `);
-        console.log(2)
 
         const resultCategory = await this.client.query(`
-            SELECT v.voicing_id, vc.category_name
+            SELECT v.voicing_id, vc.category_name, vc.voicing_category_id
             FROM voicing v
             JOIN voicing_category_connection vcc ON vcc.voicing_id = v.voicing_id
-            JOIN voicing_category vc ON vc.voicing_category_id = vcc.voicing_category_connection_id
-            GROUP BY v.voicing_id, vc.category_name;
+            JOIN voicing_category vc ON vc.voicing_category_id = vcc.voicing_category_id;
         `);
-        console.log(3)
 
         let savedVoicings = {};
 
@@ -519,11 +516,11 @@ class DB {
                 leftHand: [],
                 rightHand: [],
                 impliedNotes: [],
-                categories: []
+                categories: [],
+                categoriesIds: []
             };
             voicingsIds.push(resultNotes.rows[i].voicing_id)
         }
-        console.log(4)
 
         for (let i = 0; i < resultNotes.rowCount; ++i) {
             for (let j = 0; j < resultNotes.rows[i].notes.length; ++j) {
@@ -537,34 +534,111 @@ class DB {
                 } 
             }
         }
-        console.log(5)
 
         for (let i = 0; i < resultCategory.rowCount; ++i) {
-            console.log()
-            savedVoicings[String(resultCategory.rows[i].voicing_id)].categories.push(resultCategory.rows[i].category_name);
+            if (resultCategory.rows[i].voicing_id in savedVoicings) {
+                savedVoicings[String(resultCategory.rows[i].voicing_id)].categories.push(resultCategory.rows[i].category_name);
+                savedVoicings[String(resultCategory.rows[i].voicing_id)].categoriesIds.push(resultCategory.rows[i].voicing_category_id);
+            }
         }
 
         let savedVoicingsResult = [];
         for (const [key, value] of Object.entries(savedVoicings)) {
             savedVoicingsResult.push(value);
         }
-        console.log(6)
-
-        console.log(JSON.stringify(savedVoicingsResult, null, 2))
+        
         return {"voicings": savedVoicingsResult, "voicingsIds": voicingsIds};
     }
 
     async getVoicingCategories() {
         const getVoicingCategoriesQuery = `
-            SELECT category_name, voicing_category_id FROM voicing_category
-            WHERE voicing_category_id NOT IN (
-                SELECT vcc.voicing_category_id FROM voicing_category_connection vcc
-                WHERE vcc.voicing_category_id IS NOT NULL
-            );
+            SELECT category_name, voicing_category_id FROM voicing_category;
         `;
         
         let voicingCategoriesResult = await this.client.query(getVoicingCategoriesQuery, []);
-        return {"categories": voicingCategoriesResult.rows.map(row => row.category_name), "categoriesIds": row.voicing_category_id}
+        return {"categories": voicingCategoriesResult.rows.map(row => row.category_name), "categoriesIds": voicingCategoriesResult.rows.map(row => row.voicing_category_id)}
+    }
+
+    async deleteVoicing(voicingId, update = false) {
+        try {
+            await this.client.query('BEGIN');
+            console.log("1231231", voicingId)
+            // 1. Alle Note-IDs ermitteln, die mit dem Voicing verbunden sind
+            const noteIdsResult = await this.client.query(
+                `SELECT note_id FROM note_voicing_elem WHERE voicing_id = $1`,
+                [voicingId]
+            );
+            const noteIds = noteIdsResult.rows.map(row => row.note_id);
+    
+            // 2. Lösche Einträge in note_voicing_elem
+            await this.client.query(
+                `DELETE FROM note_voicing_elem WHERE voicing_id = $1`,
+                [voicingId]
+            );
+    
+            // 3. Lösche Kategorie-Verbindungen
+            await this.client.query(
+                `DELETE FROM voicing_category_connection WHERE voicing_id = $1`,
+                [voicingId]
+            );
+    
+            // 4. Lösche das Voicing selbst
+            let result = null;
+            if (!update) {
+                result = await this.client.query(
+                    `DELETE FROM voicing WHERE voicing_id = $1 RETURNING *`,
+                    [voicingId]
+                );
+            }
+            
+    
+            // 5. Lösche Notes, die nicht mehr mit anderen Voicings verbunden sind
+            if (noteIds.length > 0) {
+                const unusedNoteIdsResult = await this.client.query(
+                    `SELECT note_id FROM note WHERE note_id = ANY($1::integer[])
+                     AND NOT EXISTS (
+                        SELECT 1 FROM note_voicing_elem WHERE note_id = note.note_id
+                     )`,
+                    [noteIds]
+                );
+                const unusedNoteIds = unusedNoteIdsResult.rows.map(row => row.note_id);
+    
+                if (unusedNoteIds.length > 0) {
+                    await this.client.query(
+                        `DELETE FROM note WHERE note_id = ANY($1::integer[])`,
+                        [unusedNoteIds]
+                    );
+                }
+            }
+    
+            // Transaktion bestätigen
+            await this.client.query('COMMIT');
+    
+            // Überprüfe, ob das Voicing gelöscht wurde
+            if (!update && result.rowCount === 0) {
+                throw new Error(`Voicing mit ID ${voicingId} existiert nicht`);
+            }
+            
+            if (!update) return { success: true, deletedVoicing: result.rows[0] };
+            else return { success: true, updatedVoicing: voicingId };
+
+        } catch (error) {
+            // Bei Fehler Rollback durchführen
+            await this.client.query('ROLLBACK');
+            throw error;
+        }
+    }
+
+    async  deleteVoicingNotes(voicingId) {
+        await this.client.query('DELETE FROM voicing_notes WHERE voicing_id = $1', [voicingId]);
+      }
+      
+      // Löscht alle Kategorien eines Voicings
+    async  deleteVoicingCategories(voicingId) {
+        await this.client.query(
+            `DELETE FROM voicing_category_connection WHERE voicing_id = $1`,
+            [voicingId]
+        );
     }
 }
 
@@ -576,13 +650,20 @@ app.use(cors());
 app.get('/voicings', async (req, res) => {
     console.log("test123")
     try {
+        const voicings = await db.getVoicings();
+        console.log(voicings)
+        const categories = await db.getVoicingCategories();
+        console.log(categories)
 
-        res.json({"voicings": await db.getVoicings().voicings, "categories": await db.getVoicingCategories().categories, "voicingsIds": await db.getVoicings().voicingsIds, "categoriesIds": await db.getVoicingCategories().categories});
+        res.json({"voicings": voicings.voicings, "categories": categories.categories, "voicingsIds": voicings.voicingsIds, "categoriesIds": categories.categoriesIds});
     } catch (err) {
         res.status(500).send(err.message);
     }
 });
   
+app.delete('/deleteVoicing/:voicingId', async (req, res) => {
+    res.json(await db.deleteVoicing(req.params.voicingId))
+});
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'web'));
@@ -772,6 +853,10 @@ app.get('/getXML/:index', async (req, res) => {
   app.use(express.json());
   app.post('/voicing', async (req, res) => {
     console.log(req.body.voicing)
+    if (req.body.voicing.categories.length == 0) {
+        return
+    }
+    console.log("hhhh", req.body.voicing)
     try {
       const voicingId = await db.insertVoicing();
       // Noten einfügen und verknüpfen
@@ -787,34 +872,96 @@ app.get('/getXML/:index', async (req, res) => {
         db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, true, voicingId)
       }
 
-      for (const categoryName of req.body.voicing.categories) {
-        db.insertVoicingCategory(categoryName, voicingId)
+      for (const categoryId of req.body.voicing.categoriesIds) {
+        db.insertVoicingCategory(categoryId, voicingId)
       }
 
         await db.client.query('COMMIT');
+        res.json({ message: `uploaded successfully!`, "voicingId": voicingId});
+
     } catch (error) {
         await db.client.query('ROLLBACK');
         console.error('Panic!', error.stack);
+        res.json({ message: `uploaded unsuccessfull!` });
+
     }
   });
+  app.use(express.json());
 
-  app.get('/categories', async (req, res) => {
+
+app.put('/voicing/:id', async (req, res) => {
+  const voicingId = req.params.id; // ID des zu aktualisierenden Voicings aus der URL
+  console.log(req.body.voicing);
+
+  if (req.body.voicing.categories.length === 0) {
+    return res.status(400).json({ message: 'No categories provided!' });
+  }
+
+  try {
+    // Beginne eine Transaktion
+    await db.client.query('BEGIN');
+
+    // Lösche die bestehenden Noten und Kategorien für das Voicing, bevor neue eingefügt werden
+    await db.deleteVoicing(voicingId, true)
+
+    // Füge neue Noten ein
+    for (const note of req.body.voicing.leftHand) {
+      await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), true, false, voicingId);
+    }
+
+    for (const note of req.body.voicing.rightHand) {
+      await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId);
+    }
+
+    for (const note of req.body.voicing.impliedNotes) {
+      await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, true, voicingId);
+    }
+
+    // Füge neue Kategorien ein
+    for (const categoryId of req.body.voicing.categoriesIds) {
+      await db.insertVoicingCategory(categoryId, voicingId);
+    }
+
+    // Commit der Transaktion
+    await db.client.query('COMMIT');
+    res.json({ message: `Voicing ${voicingId} updated successfully!`, voicingId: voicingId });
+
+  } catch (error) {
+    // Wenn ein Fehler auftritt, rollback der Transaktion
+    await db.client.query('ROLLBACK');
+    console.error('Panic! Update failed:', error.stack);
+    res.status(500).json({ message: `Update of voicing ${voicingId} unsuccessful!` });
+
+  }
+});
+
+  app.use(express.json());
+  app.post('/categories', async (req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM voicing_category');
-      res.json(result.rows);
+      await db.client.query('BEGIN');
+      const result_id = await db.client.query(
+        'INSERT INTO voicing_category (category_name) VALUES ($1) RETURNING voicing_category_id',
+        [req.body.categoryName]
+      );
+      await db.client.query('COMMIT');
+
+      res.status(201).json({"result_id": result_id.rows[0].voicing_category_id});
     } catch (err) {
       res.status(500).send(err.message);
     }
   });
-  
-  app.use(express.json());
-  app.post('/categories', async (req, res) => {
+
+  app.post('/deleteCategory/:categoryId', async (req, res) => {
+    const categoryId = req.params.categoryId;
     try {
-      const result = await pool.query(
-        'INSERT INTO voicing_category (category_name) VALUES ($1) RETURNING *',
-        [req.body.categoryName]
+      await db.client.query('BEGIN');
+      const result = await db.client.query(
+        'DELETE FROM voicing_category WHERE voicing_category_id = $1;',
+        [categoryId]
       );
-      res.status(201).json(result.rows[0]);
+      await db.client.query('COMMIT');
+
+      res.status(201).json("Delete successfully");
     } catch (err) {
       res.status(500).send(err.message);
     }
