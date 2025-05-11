@@ -192,6 +192,7 @@ svg.addEventListener('chordClick', (e) => {
                 }
                 if (newKeys.length > 1) {
                     e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
+                    document.getElementById("impliedNotes").textContent = JSON.stringify(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][2].map(note => note.note_key));
                 }    
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;

@@ -2,11 +2,26 @@
 <html>
 <head>
     <title>Chord Trainer</title>
-    
+    <style>
+        #operators {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
+    <div id="operators">
+        <label>Mode:</label>
+        <select class="octave-select" id="rightOctave1">
+            <option value="1">Normal</option>
+            <option value="2">Show Implied Notes</option>
+            <option value="2">Only implied Voicings</option>
+        </select>
+        <div id="impliedNotes"></div>
+    </div>
     <div id="output"></div>
     <div id="output2"></div>
     <!--

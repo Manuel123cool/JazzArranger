@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS  measure_elem_voicing (
 CREATE TABLE IF NOT EXISTS measure_elem_voicing_note (
   measure_elem_voicing_note_id SERIAL PRIMARY KEY,
   is_left_hand BOOLEAN,
+  is_implied BOOLEAN,
+
   measure_elem_voicing_id integer,
   CONSTRAINT fk_measure_elem_voicing
       FOREIGN KEY(measure_elem_voicing_id)

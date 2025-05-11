@@ -47,11 +47,17 @@
             link4.textContent = 'Delete Score';
             li1.appendChild(link4);
             
-            const li5= document.createElement('li');
+            const li5 = document.createElement('li');
             const link5 = document.createElement('a');
             link5.href = `http://localhost:3000/transpose.html?scoreId=${score.score_id}`;
             link5.textContent = 'Transpose';
             li1.appendChild(link5);
+                
+            const li6 = document.createElement('li');
+            const link6 = document.createElement('a');
+            link6.href = `http://localhost:3000/updateScore/${score.score_id}`;
+            link6.textContent = 'Update';
+            li1.appendChild(link6);
 
             // Füge die <li>-Elemente zum <ul> hinzu
             ul.appendChild(li1);

@@ -317,8 +317,11 @@
             rightInputs.forEach((input, index) => {
                 const note = document.getElementById(`rightNote${index + 1}`).value;
                 const octave = document.getElementById(`rightOctave${index + 1}`).value;
-                if (note) {
+                if (note === "ANY") {
+                    voicing.rightHand.push(note);
+                } else if (note) {
                     voicing.rightHand.push(`${note}${octave}`);
+
                 }
             });
 
@@ -413,9 +416,16 @@
 
                     voicingsByCategory[category].forEach(voicing => {
                         const li = document.createElement('li');
+                        const rightHandNoteKey = voicing.rightHand.map(noteKey => {
+                            if (noteKey.includes("ANY")) {
+                                return "ANY";
+                            }
+                            return noteKey
+                        }).join(', ')
+
                         li.innerHTML = `
                             ${voicing.leftHand.join(', ')} | 
-                            ${voicing.rightHand.join(', ')} | 
+                            ${rightHandNoteKey} | 
                             Implied: ${voicing.impliedNotes.join(', ')}
                             <button class="delete-btn" onclick="deleteVoicing(${voicing.id})">Löschen</button>
                             <button class="load-btn" onclick="loadVoicing(${voicing.id})">Load</button>
@@ -587,6 +597,7 @@
         
         function loadVoicing(voicingId) {
             currentLoadVoicingId = voicingId;
+            console.log(currentLoadVoicingId);
 
             document.getElementById("leftHandInputs").innerHTML = "";
             document.getElementById("rightHandInputs").innerHTML = "";
@@ -594,7 +605,10 @@
             document.getElementById("categoryInputs").innerHTML = "";
 
             savedVoicings.forEach(voicing => {
+                if (voicing.id !== voicingId) return;
+                
                 voicing.leftHand.forEach(note => {
+                    
                     addNoteField('left');
                     const elementsNoteSelect = document.querySelectorAll('#leftHandInputs .note-select');
                     const elementsOctaveSelect = document.querySelectorAll('#leftHandInputs .octave-select');
@@ -622,9 +636,13 @@
                 });
 
                 voicing.categories.forEach(category => {
-                    const elementsCategorySelect = document.querySelectorAll('#categoryInputs .category-select');
+                    addCategoryField();
+                });
+                const elementsCategorySelect = document.querySelectorAll('#categoryInputs .category-select');
 
-                    elementsCategorySelect[elementsCategorySelect.length - 1].value = category;
+                elementsCategorySelect.forEach((element, index) => {
+
+                    element.value = voicing.categories[index];
                 });
             });
         }

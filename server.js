@@ -12,8 +12,6 @@ require('dotenv').config()
 const format = require('pg-format');
 const { json } = require('stream/consumers');
 
-console.log(process.env.DB_PSW)
-
 const client = new Client({
 	user: 'postgres',
 	password: process.env.DB_PSW,
@@ -118,17 +116,23 @@ class DB {
         }
     }
 
-    async createScore(scoreJson) {
+    async createScore(scoreJson, scoreId = -1) {
         const client = this.client;
         try {
             await client.query('BEGIN');
 
             const {fileName, storedName, noteInfo, keySign} = scoreJson;
 
-            const {rows: [{score_id}]} = await client.query(
-                'INSERT INTO score (file_name, stored_name, key_sign) VALUES ($1, $2, $3) RETURNING score_id',
-                [fileName, storedName, keySign]
-            );
+            let score_id = null;
+            if (scoreId === -1) {
+                const {rows: [{score_id}]} = await client.query(
+                    'INSERT INTO score (file_name, stored_name, key_sign) VALUES ($1, $2, $3) RETURNING score_id',
+                    [fileName, storedName, keySign]
+                );
+            } else {
+                score_id = scoreId
+            }
+            
 
             for (const measureNotes of noteInfo) {
                 const {rows: [{measure_id}]} = await client.query(
@@ -188,13 +192,12 @@ class DB {
                     }
                     if (voicings && voicings.length > 0) {
                         for (const [indexVoicing, voicing] of voicings.entries()) {
-                            if (voicing.length != 2 || voicing[0].length == 0 || voicing[1].length == 0) {
+                            if (voicing.length != 3 || voicing[0].length == 0 || voicing[1].length == 0) {
                                 continue
                             }
 
                             const vocingNotesLeft = await this.insertNote(voicing[0].map((vn, index) => {
                                 const {note_key, is_natural, octave} = this.parseNoteKey(vn);
-                                console.log({note_key, duration: 0, relativeToKey: this.parseNoteKey(relativeVoicings[indexVoicing][0][index][0]).note_key, is_natural: relativeVoicings[indexVoicing][0][index][1] === 1, octave, is_rest: false})
                                 return {
                                     note_key, duration: 0, relativeToKey: this.parseNoteKey(relativeVoicings[indexVoicing][0][index][0]).note_key, is_natural: relativeVoicings[indexVoicing][0][index][1] == 1, octave, is_rest: false
                                 };
@@ -207,11 +210,22 @@ class DB {
                                 };
                             }));
 
+                            console.log(voicing[2])
+                            let vocingNotesImplied = null;
+                            if (voicing[2].length > 0) {
+                                 vocingNotesImplied = await this.insertNote(voicing[2].map((vn, index) => {
+                                    const {note_key, is_natural, octave} = this.parseNoteKey(vn);
+                                    return {
+                                        note_key, duration: 0, relativeToKey: null, is_natural: null, octave, is_rest: false
+                                    };
+                                }));
+                            }
+                            
+
                             const {rows: [{measure_elem_voicing_id}]} = await client.query(
                                 'INSERT INTO measure_elem_voicing (measure_elem_id) VALUES ($1) RETURNING measure_elem_voicing_id',
                                 [measure_elem_id]
                             );
-                            console.log(measure_elem_voicing_id);
 
                             const vocingNotesLeftIdQuery = format(
                                 'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_left_hand) VALUES %L',
@@ -234,6 +248,20 @@ class DB {
                             );
                             
                             const resultVocingNotesRight = await client.query(vocingNotesRightIdQuery);
+
+                            if (voicing[2].length > 0) {
+                                const vocingNotesImpliedIdQuery = format(
+                                    'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_implied) VALUES %L',
+                                    vocingNotesImplied.map(id => [
+                                        measure_elem_voicing_id,
+                                        id,
+                                        true
+                                    ])
+                                );
+                                
+                                const resultVocingNotesImplied = await client.query(vocingNotesImpliedIdQuery);
+                            }
+                            
                         }
                     }
                 }
@@ -332,7 +360,7 @@ class DB {
                         const voicings = [];
                         for (const voicing of voicingResult.rows) {
                             const voicingNotesQuery = `
-                                SELECT n.note_key, n.is_natural, n.octave, n.relative_to_key, mevn.is_left_hand
+                                SELECT n.note_key, n.is_natural, n.octave, n.relative_to_key, mevn.is_left_hand, mevn.is_implied
                                 FROM measure_elem_voicing_note mevn
                                 JOIN note n ON mevn.note_id = n.note_id
                                 WHERE mevn.measure_elem_voicing_id = $1
@@ -342,15 +370,19 @@ class DB {
                             // Noten in linke und rechte Hand aufteilen
                             //constructor(note_key, duration, is_natural, octave, is_rest, relative_to_key = null, oneTuplet = null) {
                             const leftHandNotes = voicingNotesResult.rows
-                                .filter(vn => vn.is_left_hand)
+                                .filter(vn => vn.is_left_hand && !vn.is_implied)
                                 .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
 
                             const rightHandNotes = voicingNotesResult.rows
-                                .filter(vn => !vn.is_left_hand)
+                                .filter(vn => !vn.is_left_hand && !vn.is_implied)
+                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
+                            
+                            const impliedNotes = voicingNotesResult.rows
+                                .filter(vn => vn.is_implied)
                                 .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
                             
                             if (leftHandNotes.length > 0 && rightHandNotes.length > 0) {
-                                voicings.push([leftHandNotes, rightHandNotes]);
+                                voicings.push([leftHandNotes, rightHandNotes, impliedNotes]);
                             }
                         }
 
@@ -416,6 +448,32 @@ class DB {
         this.client.query(updateQuery, [voicingIndex, measure_elem_id]);
     }
 
+    async deleteScoreData(scoreId) {
+        const deleteScoreQuery = `
+            DELETE FROM measure WHERE score_id = $1;
+        `;
+        
+        await this.client.query(deleteScoreQuery, [scoreId]);
+
+
+        const deleteNoteQuery = `
+            DELETE FROM note
+            WHERE note_id NOT IN (
+                SELECT note_id FROM measure_elem_note
+                UNION
+                SELECT note_id FROM measure_elem_voicing_note
+                UNION
+                SELECT note_id FROM chord_detail_elem
+                UNION
+                SELECT note_id FROM tuplet
+                UNION
+                SELECT note_id FROM note_voicing_elem
+            );
+        `;
+        
+        await this.client.query(deleteNoteQuery, []);
+    }
+
     deleteScore(scoreId) {
         const deleteScoreQuery = `
             DELETE FROM score WHERE score_id = $1;
@@ -478,11 +536,6 @@ class DB {
     }
 
     async insertVoicingCategory(categoryId, voicingId) {
-        /* const categoryRes = await this.client.query(
-            'INSERT INTO voicing_category (category_name) VALUES ($1) RETURNING voicing_category_id',
-            [categoryName]
-        );
- */
         const categoryConnectionRes = await this.client.query(
             'INSERT INTO voicing_category_connection (voicing_id, voicing_category_id) VALUES ($1, $2)',
             [voicingId, categoryId]
@@ -492,20 +545,22 @@ class DB {
     async getVoicings() {
         const resultNotes = await this.client.query(`
             SELECT v.voicing_id, 
-                    json_agg(n.*) as notes,
-                    json_agg(nve.is_left_hand) as hands,
-                    json_agg(nve.is_implied) as implied 
+                json_agg(n.*) AS notes,
+                json_agg(nve.is_left_hand) AS hands,
+                json_agg(nve.is_implied) AS implied 
             FROM voicing v
             JOIN note_voicing_elem nve ON v.voicing_id = nve.voicing_id
             JOIN note n ON nve.note_id = n.note_id
             GROUP BY v.voicing_id
+            ORDER BY v.voicing_id;
         `);
 
         const resultCategory = await this.client.query(`
             SELECT v.voicing_id, vc.category_name, vc.voicing_category_id
             FROM voicing v
             JOIN voicing_category_connection vcc ON vcc.voicing_id = v.voicing_id
-            JOIN voicing_category vc ON vc.voicing_category_id = vcc.voicing_category_id;
+            JOIN voicing_category vc ON vc.voicing_category_id = vcc.voicing_category_id
+            ORDER BY v.voicing_id;
         `);
 
         let savedVoicings = {};
@@ -530,7 +585,12 @@ class DB {
                 } else if (resultNotes.rows[i].implied[j]) {
                     savedVoicings[String(resultNotes.rows[i].voicing_id)].impliedNotes.push(note.note_key + note.octave);
                 } else {
-                    savedVoicings[String(resultNotes.rows[i].voicing_id)].rightHand.push(note.note_key + note.octave);
+                    if (note.note_key == "ANY") {
+                        savedVoicings[String(resultNotes.rows[i].voicing_id)].rightHand.push(note.note_key);
+                    } else {
+                        savedVoicings[String(resultNotes.rows[i].voicing_id)].rightHand.push(note.note_key + note.octave);
+
+                    }
                 } 
             }
         }
@@ -562,7 +622,6 @@ class DB {
     async deleteVoicing(voicingId, update = false) {
         try {
             await this.client.query('BEGIN');
-            console.log("1231231", voicingId)
             // 1. Alle Note-IDs ermitteln, die mit dem Voicing verbunden sind
             const noteIdsResult = await this.client.query(
                 `SELECT note_id FROM note_voicing_elem WHERE voicing_id = $1`,
@@ -648,12 +707,9 @@ app.use(cors());
 
 // Voicings laden
 app.get('/voicings', async (req, res) => {
-    console.log("test123")
     try {
         const voicings = await db.getVoicings();
-        console.log(voicings)
         const categories = await db.getVoicingCategories();
-        console.log(categories)
 
         res.json({"voicings": voicings.voicings, "categories": categories.categories, "voicingsIds": voicings.voicingsIds, "categoriesIds": categories.categoriesIds});
     } catch (err) {
@@ -672,6 +728,36 @@ app.get('/delete/:scoreId', async (req, res) => {
     const scoreId = req.params.scoreId;
     db.deleteScore(scoreId);
     res.redirect('/main');
+});
+
+app.get('/updateScore/:scoreId', async (req, res) => {
+    const scoreId = req.params.scoreId;
+
+    const name = await db.getStoredName(scoreId);
+
+    let command = 'readLeadSheetServer.py';
+    command = `python3 ${command} ./uploads/${name.stored_name}`
+
+    exec(command, async (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Fehler beim Ausführen des Python-Skripts: ${error.message}`);
+            return res.status(500).json({ error: 'Error executing Python script' });
+        }
+        if (stderr) {
+            console.error(`Python-Fehler: ${stderr}`);
+            return res.status(500).json({ error: 'Python script error' });
+        }
+
+        const parsedOutput = JSON.parse(stdout);
+        const result = parsedOutput["result"]
+
+        const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"]};
+        await db.deleteScoreData(scoreId);
+
+        db.createScore(oneFileJson, scoreId);
+
+        res.redirect('/main');
+    });
 });
 
 app.get('/transpose/:scoreId', async (req, res) => {
@@ -702,6 +788,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
 
         db.createScore(oneFileJson);
         db.deleteScore(scoreId);
+
         res.json({ message: `Transposed successfully!` });
     });
 });
@@ -852,11 +939,9 @@ app.get('/getXML/:index', async (req, res) => {
   // Voicing speichern
   app.use(express.json());
   app.post('/voicing', async (req, res) => {
-    console.log(req.body.voicing)
     if (req.body.voicing.categories.length == 0) {
         return
     }
-    console.log("hhhh", req.body.voicing)
     try {
       const voicingId = await db.insertVoicing();
       // Noten einfügen und verknüpfen
@@ -864,10 +949,13 @@ app.get('/getXML/:index', async (req, res) => {
         db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), true, false, voicingId)
       }
 
-      for (const note of req.body.voicing.rightHand) {
-        db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId)
-      }
-
+      if (req.body.voicing.rightHand.length > 0 && req.body.voicing.rightHand[0] === "ANY") {
+            await db.insertVoicingNote("ANY", 3, false, false, voicingId);
+        } else {
+            for (const note of req.body.voicing.rightHand) {
+                db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId)
+            }
+        }
       for (const note of req.body.voicing.impliedNotes) {
         db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, true, voicingId)
       }
@@ -891,7 +979,6 @@ app.get('/getXML/:index', async (req, res) => {
 
 app.put('/voicing/:id', async (req, res) => {
   const voicingId = req.params.id; // ID des zu aktualisierenden Voicings aus der URL
-  console.log(req.body.voicing);
 
   if (req.body.voicing.categories.length === 0) {
     return res.status(400).json({ message: 'No categories provided!' });
@@ -909,9 +996,12 @@ app.put('/voicing/:id', async (req, res) => {
       await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), true, false, voicingId);
     }
 
+    
     for (const note of req.body.voicing.rightHand) {
-      await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId);
+        await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId);
     }
+    
+    
 
     for (const note of req.body.voicing.impliedNotes) {
       await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, true, voicingId);
@@ -970,3 +1060,63 @@ app.put('/voicing/:id', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
+
+
+async function addVoicingsFromArray() {
+    const voicings = [
+        [["C3"], ["E4", "B4"]], [["D3"], ["F4", "C5"]], [["G3"], ["B4", "F5"]],
+        [["C2"], ["B3", "E4"]], [["D2"], ["C4", "F4"]], [["G2"], ["F4", "B4"]],
+        [["C3", "B3"], ["E4", "G4"]], [["D3", "C4"], ["F4", "A4"]], [["G3", "F4"], ["B4", "D5"]],
+        [["C3", "B3"], ["E4", "G4", "D5"]], [["D3", "C4"], ["F4", "A4", "E5"]], [["G3", "F4"], ["B4", "D5", "A5"]],
+        [["C3", "E3"], ["B3", "D4", "G4"]], [["D3", "F3"], ["C4", "E4", "A4"]], [["G3", "B3"], ["F4", "A4", "D5"]],
+        [["C2", "E3"], ["B3", "D4", "G4"]], [["D2", "F3"], ["C4", "E4", "A4"]], [["G2", "B3"], ["F4", "A4", "D5"]],
+        [["G3"], ["C4", "E4", "B4"]], [["A3"], ["D4", "F4", "C5"]], [["D4"], ["G4", "B4", "F5"]],
+        [["E3"], ["C4", "G4", "B4"]], [["F3"], ["D4", "A4", "C5"]], [["B3"], ["G4", "D5", "F5"]],
+        [["C4"], ["F4", "A4", "D5"]], [["F4"], ["B4", "D5", "G5"]],
+        [["A3"], ["F4", "C5", "D5"]], [["D4"], ["B4", "F5", "G5"]],
+        [["C4"], ["G4", "B4", "E5"]], [["D4"], ["A4", "C5", "F5"]], [["G3"], ["D5", "F5", "B5"]],
+        [["C4"], ["A4", "D5", "F5"]], [["F4"], ["D5", "G5", "B5"]],
+        [["E4"], ["B4", "C5", "G5"]], [["F4"], ["C5", "D5", "A5"]], [["B3"], ["F4", "G4", "D5"]],
+        [["C4"], ["B4", "E5", "G5"]], [["D4"], ["C5", "F5", "A5"]], [["G3"], ["F4", "B4", "D5"]],
+        [["C3"], ["E4", "G4", "B4", "D5"]], [["C3"], ["G4", "B4", "D5", "E5"]], [["C3"], ["B4", "D5", "E5", "G5"]], [["C3"], ["D5", "E5", "G5", "B5"]],
+        [["D3"], ["F4", "A4", "C5", "E5"]], [["D3"], ["C5", "E5", "F5", "A5"]], [["D3"], ["E4", "F4", "A4", "C5"]],
+        [["G2"], ["B3", "D4", "F4", "A4"]], [["G2"], ["D4", "F4", "A4", "B4"]], [["G2"], ["F4", "A4", "B4", "D5"]], [["G2"], ["A3", "B3", "D4", "F4"]],
+        [["C4"], ["E4", "G4", "A4", "C5"]], [["E4"], ["G4", "A4", "C5", "E5"]], [["G4"], ["A4", "C5", "E5", "G5"]], [["A4"], ["C5", "E5", "G5", "A5"]],
+        [["D4"], ["F4", "A4", "B4", "D5"]], [["F4"], ["A4", "B4", "D5", "F5"]], [["A4"], ["B4", "D5", "F5", "A5"]], [["B4"], ["D5", "F5", "A5", "B5"]],
+        [["G4"], ["B4", "D5", "F5", "G5"]], [["B4"], ["D5", "F5", "G5", "B5"]], [["D4"], ["F4", "G4", "B4", "D5"]], [["F4"], ["G4", "B4", "D5", "F5"]],
+        [["C3", "F3", "B-3"], ["E-4", "A-4"]], [["F3", "B-3"], ["E-4", "A-4", "C5"]],
+        [["D3", "A3", "E4", "F4"], ["C5", "G5"]], [["D3", "A3", "E4", "F#4"], ["C#5", "G#5"]],
+        [["D3", "F3", "C4"], ["E4", "G4"]], [["F3", "C4"], ["E4", "G4", "D5"]],
+        [["F3", "C4"], ["E4", "A4", "D5"]],
+        [["F3", "C4"], ["E4", "B4", "D5"]],
+        [["E3", "A3", "C4"], ["E4", "B4"]],
+        [["E3", "B-3"], ["E-4", "A-4", "C5"]], [["E3", "B-3"], ["E-4", "G4", "C5"]],
+        [["C3", "G3"], ["F4", "B-4", "D5"]],
+        [["G3", "A3", "D4", "E4"], ["G4"]],
+        [["A3", "C4", "D4", "G4"], ["B4"]],
+        [["D3", "G#3", "C4"], ["F#4"]],
+        [["D#3"], ["B3", "F#4", "A4"]],
+        [["D4"], ["F#4", "G#4", "B4", "D5"]],
+        [["D3", "F3", "A-3", "C4"], ["E4", "G4"]]
+    ]
+    await db.client.query('BEGIN');
+
+    for (let i = 0; i < voicings.length; ++i) {
+        const voicingId = await db.insertVoicing();
+        for (let j = 0; j < voicings[i].length; ++j) {
+            for (let k = 0; k < voicings[i][j].length; ++k) {
+                const note = voicings[i][j][k];
+                if (j == 0) {
+                    db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), true, false, voicingId)
+                  }
+            
+                  if (j == 1) {
+                    db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId)
+                  }
+          
+                  
+            }
+        }
+    }
+    await db.client.query('COMMIT');
+}
