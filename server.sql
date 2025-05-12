@@ -59,16 +59,18 @@ CREATE TABLE IF NOT EXISTS measure_elem (
   measure_id integer,
 
   voicing_index integer,
-
+  voicing_index_left_hand integer,
+  
   CONSTRAINT fk_measure
       FOREIGN KEY(measure_id)
         REFERENCES measure(measure_id) ON DELETE CASCADE
 );
 
+
 CREATE TABLE IF NOT EXISTS  measure_elem_voicing (
   measure_elem_voicing_id SERIAL PRIMARY KEY,
 
-
+  from_any_top_note BOOLEAN,
   voicing_id integer,
     CONSTRAINT fk_voicing
       FOREIGN KEY(voicing_id)

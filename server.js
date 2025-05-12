@@ -147,7 +147,8 @@ class DB {
                         chord_details,
                         voicingIndex,
                         voicings,
-                        relativeVoicings 
+                        relativeVoicings,
+                        leftHandVoicings
                     } = noteObj;
 
                     // Handle Hauptnote
@@ -210,7 +211,6 @@ class DB {
                                 };
                             }));
 
-                            console.log(voicing[2])
                             let vocingNotesImplied = null;
                             if (voicing[2].length > 0) {
                                  vocingNotesImplied = await this.insertNote(voicing[2].map((vn, index) => {
@@ -264,6 +264,82 @@ class DB {
                             
                         }
                     }
+
+                    if (leftHandVoicings && leftHandVoicings.length > 0) {
+                        for (const [indexVoicing, voicing] of leftHandVoicings.entries()) {
+                            for (const [indexVoicingInversion, voicingInversion] of voicing.absolute.entries()) {
+                                for (const [indexVoicingOctave, voicingOcatave] of voicingInversion.entries()) {
+                                    if ( Object.keys(voicingOcatave).length != 3 || voicingOcatave["leftHand"].length == 0 || voicingOcatave["rightHand"].length == 0) {
+                                        continue
+                                    }
+
+                                    const vocingNotesLeft = await this.insertNote(voicingOcatave["leftHand"].map((vn, index) => {
+                                        const {note_key, is_natural, octave} = this.parseNoteKey(vn);
+                                        return {
+                                            note_key, duration: 0, relativeToKey: this.parseNoteKey(voicing.relative[indexVoicingInversion][indexVoicingOctave][0][index][0]).note_key, is_natural: voicing.relative[indexVoicingInversion][indexVoicingOctave][0][index][1] == 1, octave, is_rest: false
+                                        };
+                                    }));
+
+                                    const vocingNotesRight = await this.insertNote(voicingOcatave["rightHand"].map((vn, index) => {
+                                        const {note_key, is_natural, octave} = this.parseNoteKey(vn);
+                                        return {
+                                            note_key, duration: 0, relativeToKey: this.parseNoteKey(voicing.relative[indexVoicingInversion][indexVoicingOctave][1][index][0]).note_key, is_natural: voicing.relative[indexVoicingInversion][indexVoicingOctave][1][index][1] == 1, octave, is_rest: false
+                                        };
+                                    }));
+
+                                    let vocingNotesImplied = null;
+                                    if (voicingOcatave["impliedNotes"].length > 0) {
+                                        vocingNotesImplied = await this.insertNote(voicingOcatave["impliedNotes"].map((vn, index) => {
+                                            const {note_key, is_natural, octave} = this.parseNoteKey(vn);
+                                            return {
+                                                note_key, duration: 0, relativeToKey: null, is_natural: null, octave, is_rest: false
+                                            };
+                                        }));
+                                    }
+                                    
+                                    const {rows: [{measure_elem_voicing_id}]} = await client.query(
+                                        'INSERT INTO measure_elem_voicing (measure_elem_id, from_any_top_note) VALUES ($1, $2) RETURNING measure_elem_voicing_id',
+                                        [measure_elem_id, true]
+                                    );
+
+                                    const vocingNotesLeftIdQuery = format(
+                                        'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_left_hand) VALUES %L',
+                                        vocingNotesLeft.map(id => [
+                                            measure_elem_voicing_id,
+                                            id,
+                                            true
+                                        ])
+                                    );
+
+                                    const resultVocingNotesLeftIdQuery = await client.query(vocingNotesLeftIdQuery);
+
+                                    const vocingNotesRightIdQuery = format(
+                                        'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_left_hand) VALUES %L',
+                                        vocingNotesRight.map(id => [
+                                            measure_elem_voicing_id,
+                                            id,
+                                            false
+                                        ])
+                                    );
+                                    
+                                    const resultVocingNotesRight = await client.query(vocingNotesRightIdQuery);
+
+                                    if (voicingOcatave["impliedNotes"].length > 0) {
+                                        const vocingNotesImpliedIdQuery = format(
+                                            'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_implied) VALUES %L',
+                                            vocingNotesImplied.map(id => [
+                                                measure_elem_voicing_id,
+                                                id,
+                                                true
+                                            ])
+                                        );
+                                        
+                                        const resultVocingNotesImplied = await client.query(vocingNotesImpliedIdQuery);
+                                    } 
+                                } 
+                            }
+                        }
+                    }
                 }
             }
             await client.query('COMMIT');
@@ -307,7 +383,7 @@ class DB {
             // Für jedes Measure die zugehörigen Elemente und Noten abrufen
             for (const measure of measuresResult.rows) {
                 const measureElementsQuery = `
-                    SELECT me.measure_elem_id, me.voicing_index
+                    SELECT me.measure_elem_id, me.voicing_index, me.voicing_index_left_hand
                     FROM measure_elem me
                     WHERE me.measure_id = $1
                     ORDER BY me.measure_elem_id`;
@@ -331,8 +407,9 @@ class DB {
                     const note = noteResult.rows[0];
                     const noteObj = {
                         oneNote: new OneNote(note.note_key, note.duration,  note.is_natural, note.octave, note.is_rest, note.relative_to_key, note.numerator ? { numerator: note.numerator, denominator: note.denominator } : null),
-                        voicingIndex: elem.voicing_index || elem.voicing_index == 0 ? elem.voicing_index : -1, // wird später gesetzt, falls Voicings vorhanden
-                        voicings: [], // wird später gesetzt, falls Voicings vorhanden
+                        voicingIndex: elem.voicing_index || elem.voicing_index == 0 ? elem.voicing_index : -1,
+                        voicingIndexLeftHand: elem.voicing_index_left_hand || elem.voicing_index_left_hand == 0 ? elem.voicing_index_left_hand : -1,
+                        voicings: [], 
                         chord_details: [],
                     };
     
@@ -350,7 +427,7 @@ class DB {
     
                     // Voicing-Details abrufen
                     const voicingQuery = `
-                        SELECT mev.measure_elem_voicing_id
+                        SELECT mev.measure_elem_voicing_id, mev.from_any_top_note
                         FROM measure_elem_voicing mev
                         WHERE mev.measure_elem_id = $1
                         ORDER BY mev.measure_elem_voicing_id`;
@@ -358,6 +435,8 @@ class DB {
     
                     if (voicingResult.rows.length > 0) {
                         const voicings = [];
+                        const leftHandVoicings = [];
+
                         for (const voicing of voicingResult.rows) {
                             const voicingNotesQuery = `
                                 SELECT n.note_key, n.is_natural, n.octave, n.relative_to_key, mevn.is_left_hand, mevn.is_implied
@@ -382,12 +461,17 @@ class DB {
                                 .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
                             
                             if (leftHandNotes.length > 0 && rightHandNotes.length > 0) {
-                                voicings.push([leftHandNotes, rightHandNotes, impliedNotes]);
+                                if (voicing.from_any_top_note) {
+                                    leftHandVoicings.push([leftHandNotes, rightHandNotes, impliedNotes]);
+                                } else {
+                                    voicings.push([leftHandNotes, rightHandNotes, impliedNotes]);
+                                }
                             }
                         }
 
                         if ( voicings.length > 0) {
                             noteObj.voicings = voicings;
+                            noteObj.leftHandVoicings = leftHandVoicings;
                         } else {
                             noteObj.voicings = [];
                         }
@@ -416,7 +500,7 @@ class DB {
         return scoreNamesResult.rows
     }
 
-    async updateVoicingIndex(scoreId, measureId, voicingIndex, noteId) {
+    async updateVoicingIndex(scoreId, measureId, voicingIndex, noteId, leftHand = false) {
         const measureIdQuery = `
                 SELECT measure_id 
                 FROM measure 
@@ -439,13 +523,22 @@ class DB {
 
         let measure_elem_id = elemIdResult.rows[noteId].measure_elem_id;
 
+        if (!leftHand) {
+            const updateQuery = `
+                UPDATE measure_elem
+                SET voicing_index = $1
+                WHERE measure_elem_id = $2;
+            `;
+            this.client.query(updateQuery, [voicingIndex, measure_elem_id]);
+        } else {
+            const updateQuery = `
+                UPDATE measure_elem
+                SET voicing_index_left_hand = $1
+                WHERE measure_elem_id = $2;
+            `;
+            this.client.query(updateQuery, [voicingIndex, measure_elem_id]);
+        }
         
-        const updateQuery = `
-            UPDATE measure_elem
-            SET voicing_index = $1
-            WHERE measure_elem_id = $2;
-        `;
-        this.client.query(updateQuery, [voicingIndex, measure_elem_id]);
     }
 
     async deleteScoreData(scoreId) {
@@ -831,6 +924,13 @@ app.get('/json', (req, res) => {
 app.use(express.json());
 app.post('/saveStatus/:scoreId', async (req, res) => {
     db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId);
+
+    res.json({ message: 'JSON erfolgreich gespeichert!' });
+});
+
+app.use(express.json());
+app.post('/saveStatusLeftHand/:scoreId', async (req, res) => {
+    db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId, true);
 
     res.json({ message: 'JSON erfolgreich gespeichert!' });
 });

@@ -41,7 +41,7 @@ def create_notes_with_root_c_as_list():
     
     return chords_notes_list
 
-def getPossibleLeftHandVoicings(voicings, required_notes, top_note):
+def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
     def makeInversions(voicing):
         inversedVoicings = [voicing]
 
@@ -107,13 +107,23 @@ def getPossibleLeftHandVoicings(voicings, required_notes, top_note):
                 newVoicingTransposed[1] = [top_note]
 
                 if check_voicing(newVoicingTransposed, top_note, required_notes):
-                    print("yes")
-                    inversions = [{"rightHand": newVoicingTransposed[1], "leftHand": inversion, "impliedNotes": newVoicingTransposed[2]} for inversion in makeInversions(newVoicingTransposed[0])]
+                    inversions = [{"leftHand": inversion, "rightHand": newVoicingTransposed[1], "impliedNotes": newVoicingTransposed[2]} for inversion in makeInversions(newVoicingTransposed[0])]
 
-                    possibleLeftHandChords.append(makeOctaves(inversions))
+                    octaves = makeOctaves(inversions)
+
+                    relativeVoicings = []
+                    for inversion in octaves:
+                        relativeVoicings.append([])
+                        for octave in inversion:
+                            relativeVoicings[-1].append(relativeKeysOfVoicing(transpose_voicing(octave, 0, True), keySign, required_notes))
+
+                    possibleLeftHandChords.append({"absolute": octaves, "relative": relativeVoicings})
+                    
+                    
     json_formatted_str = json.dumps(possibleLeftHandChords, indent=2)
+    #print(json_formatted_str)
 
-    print(json_formatted_str)
+    return possibleLeftHandChords
 
 def getAllVoicings():
     url = 'http://localhost:3000/voicings'
@@ -414,7 +424,7 @@ def rePossibleVoicings(result, keySign, voicings):
 
             result[index][index1]["voicings"] = matching_voicings
             result[index][index1]["relativeVoicings"] = matching_voicings_relative
-            getPossibleLeftHandVoicings(voicings, required_notes, top_note)
+            result[index][index1]["leftHandVoicings"] = getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign)
 
     return result
 
