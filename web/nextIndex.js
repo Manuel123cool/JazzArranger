@@ -43,17 +43,57 @@ function isDifferentInversion(currentVoicing, nextVoicing) {
 }
 
 function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
+    if (Number(mode) == 1) {
+        if (currentIndex > twoHandedVoicings.length - 1 || currentIndex + 1 == twoHandedVoicings.length) {
+            return 0;
+        }
+        return currentIndex + 1;
+    }
+
+    if (Number(mode) == 2) {
+        if (currentIndex > twoHandedVoicings.length - 1 || currentIndex == twoHandedVoicings.length - 1) {
+            currentIndex = 0;
+        }
+        let once = false
+
+        for (let i = currentIndex + 1; i < leftHandedVoicings.length + twoHandedVoicings.length; ++i) {
+            if (leftHandedVoicings[i][2].length > 0) {
+                return i
+            }
+            if (i == twoHandedVoicings.length - 1 && !once) {
+                i = 0;
+                once = true;
+            }  
+        }
+        return currentIndex;
+    }
+
     if (Number(mode) == 3 && currentIndex > twoHandedVoicings.length - 1) {
         let once = false
+        let returnIndeces = [];
+        let returnOctaves = [];
         for (let i = currentIndex; i < leftHandedVoicings.length + twoHandedVoicings.length; ++i) {
             if (isDifferentVoicing(leftHandedVoicings[currentIndex - twoHandedVoicings.length], leftHandedVoicings[i - twoHandedVoicings.length])) {
-                return i;
+                if (!returnIndeces.includes(i)) {
+                    returnOctaves.push(leftHandedVoicings[i - twoHandedVoicings.length][0][0].octave);
+                    returnIndeces.push(i);
+                }
             }
             if (i == twoHandedVoicings.length + leftHandedVoicings.length - 1 && !once) {
                 i = twoHandedVoicings.length;
                 once = true;
+            }  
+        }
+        let diff = Infinity
+        let returnIndex = -1;
+        for (let i = 0; i < returnOctaves.length; ++i) {
+            if (Math.abs(leftHandedVoicings[currentIndex - twoHandedVoicings.length][0][0].octave - returnOctaves[i]) < diff) {
+                diff = Math.abs(leftHandedVoicings[currentIndex - twoHandedVoicings.length][0][0].octave - returnOctaves[i])
+                returnIndex = i;
             }
         }
+        if (returnIndex !== -1) return returnIndeces[returnIndex]
+
     } else if (Number(mode) == 3) {
         return twoHandedVoicings.length 
     }
@@ -83,11 +123,8 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
         let returnIndex = -1;
         for (let i = 0; i < returnOctaves.length; ++i) {
             if (Math.abs(leftHandedVoicings[currentIndex - twoHandedVoicings.length][0][0].octave - returnOctaves[i]) < diff) {
-                //if (!isDifferentInversion(leftHandedVoicings[returnIndeces[i]], leftHandedVoicings[returnIndeces[0]])) {
-                    diff = Math.abs(leftHandedVoicings[currentIndex - twoHandedVoicings.length][0][0].octave - returnOctaves[i])
-                    returnIndex = i;
-                //}
-                
+                diff = Math.abs(leftHandedVoicings[currentIndex - twoHandedVoicings.length][0][0].octave - returnOctaves[i])
+                returnIndex = i;
             }
         }
         if (returnIndex !== -1) return returnIndeces[returnIndex]

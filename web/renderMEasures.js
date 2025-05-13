@@ -183,10 +183,7 @@ svg.addEventListener('chordClick', (e) => {
 
                 voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex)
             }
-
-            if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] + 1 == e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length) {
-                voicngIndex = 0;
-            }
+            
              // Voicings hinzufügen (falls vorhanden)
              if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
                 for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length; ++m) {

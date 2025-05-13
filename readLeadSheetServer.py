@@ -82,15 +82,17 @@ def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
                     newOctave["leftHand"][index] = note.Note(newOctave["leftHand"][index])
                     newOctave["leftHand"][index].octave -= 1
                     newOctave["leftHand"][index] = newOctave["leftHand"][index].nameWithOctave
-                    
-            voicingsWithAllOctaves[-1].append(copy.deepcopy(newOctave))
+            
+            if note.Note(newOctave["leftHand"][-1]).octave < 4:
+                voicingsWithAllOctaves[-1].append(copy.deepcopy(newOctave))
+                
             while note.Note(newOctave["leftHand"][0]).octave > 1:
                 for index in range(len(newOctave["leftHand"])):
                     newOctave["leftHand"][index] = note.Note(newOctave["leftHand"][index])
                     newOctave["leftHand"][index].octave -= 1
                     newOctave["leftHand"][index] = newOctave["leftHand"][index].nameWithOctave
 
-                if note.Note(newOctave["leftHand"][0]).octave > 1:
+                if note.Note(newOctave["leftHand"][0]).octave > 1 or note.Note(newOctave["leftHand"][-1]).octave < 4:
                     voicingsWithAllOctaves[-1].append(copy.deepcopy(newOctave))
 
         return voicingsWithAllOctaves
