@@ -179,7 +179,9 @@ svg.addEventListener('chordClick', (e) => {
              }
 
              if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length - 1) {
-                voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] + 1;
+                voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
+
+                voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex)
             }
 
             if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] + 1 == e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length) {
@@ -190,10 +192,8 @@ svg.addEventListener('chordClick', (e) => {
                 for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length; ++m) {
                     newKeys.push(convertToVexFlowKeyVoicing(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1][m]));
                 }
-                if (newKeys.length > 1) {
-                    e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
-                    document.getElementById("impliedNotes").textContent = JSON.stringify(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][2].map(note => note.note_key));
-                }    
+                e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
+                document.getElementById("impliedNotes").textContent = JSON.stringify(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][2].map(note => note.note_key));
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
 
@@ -599,6 +599,9 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         }
 
         if (!note.isRest()) {
+            if (lastAddedVoicingIndex > originalData[measureIndex + lineIndex * 3][noteIndex].voicings.length - 1) {
+                return addAccidental([originalData[measureIndex][noteIndex].oneNote], note)
+            }
             return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][1] : [originalData[measureIndex][noteIndex].oneNote], note)
         }
         return note;
@@ -613,6 +616,10 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         }
 
         if (!note.isRest()) {
+            const voicingsLength = originalData[measureIndex + lineIndex * 3][noteIndex].voicings.length
+            if (lastAddedVoicingIndex >  voicingsLength - 1 && lastAddedVoicingIndex != -1) {
+                return addAccidental(originalData[measureIndex + lineIndex * 3][noteIndex].leftHandVoicings[lastAddedVoicingIndex - voicingsLength][0], note)
+            }
             return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][0] : [originalData[measureIndex][noteIndex].oneNote], note)
         }
         return note;

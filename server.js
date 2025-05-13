@@ -269,9 +269,11 @@ class DB {
                         for (const [indexVoicing, voicing] of leftHandVoicings.entries()) {
                             for (const [indexVoicingInversion, voicingInversion] of voicing.absolute.entries()) {
                                 for (const [indexVoicingOctave, voicingOcatave] of voicingInversion.entries()) {
+
                                     if ( Object.keys(voicingOcatave).length != 3 || voicingOcatave["leftHand"].length == 0 || voicingOcatave["rightHand"].length == 0) {
                                         continue
                                     }
+                                    console.log(JSON.stringify(voicingOcatave, null, 2))
 
                                     const vocingNotesLeft = await this.insertNote(voicingOcatave["leftHand"].map((vn, index) => {
                                         const {note_key, is_natural, octave} = this.parseNoteKey(vn);
@@ -333,7 +335,6 @@ class DB {
                                                 true
                                             ])
                                         );
-                                        
                                         const resultVocingNotesImplied = await client.query(vocingNotesImpliedIdQuery);
                                     } 
                                 } 
@@ -443,7 +444,8 @@ class DB {
                                 FROM measure_elem_voicing_note mevn
                                 JOIN note n ON mevn.note_id = n.note_id
                                 WHERE mevn.measure_elem_voicing_id = $1
-                                ORDER BY mevn.is_left_hand DESC, n.octave, n.note_key`;
+                                ORDER BY mevn.note_id`
+
                             const voicingNotesResult = await this.client.query(voicingNotesQuery, [voicing.measure_elem_voicing_id]);
     
                             // Noten in linke und rechte Hand aufteilen

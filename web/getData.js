@@ -61,8 +61,12 @@ function getVoicings(jsonData) {
     let voicingsMeasure = []
 
     measure.forEach( (element, index) => {
-      voicingsMeasure.push(element.voicings)
+      if (element.leftHandVoicings && element.leftHandVoicings.length > 0 )
+        voicingsMeasure.push(element.voicings.concat(element.leftHandVoicings))
+      else
+        voicingsMeasure.push(element.voicings)
     })
+
     voicingsMeasures.push(voicingsMeasure);
   })
 

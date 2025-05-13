@@ -84,13 +84,13 @@ def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
                     newOctave["leftHand"][index] = newOctave["leftHand"][index].nameWithOctave
                     
             voicingsWithAllOctaves[-1].append(copy.deepcopy(newOctave))
-            while note.Note(newOctave["leftHand"][0]).octave > 2:
+            while note.Note(newOctave["leftHand"][0]).octave > 1:
                 for index in range(len(newOctave["leftHand"])):
                     newOctave["leftHand"][index] = note.Note(newOctave["leftHand"][index])
                     newOctave["leftHand"][index].octave -= 1
                     newOctave["leftHand"][index] = newOctave["leftHand"][index].nameWithOctave
 
-                if note.Note(newOctave["leftHand"][0]).octave > 2:
+                if note.Note(newOctave["leftHand"][0]).octave > 1:
                     voicingsWithAllOctaves[-1].append(copy.deepcopy(newOctave))
 
         return voicingsWithAllOctaves
@@ -272,8 +272,8 @@ def checkIfAvailableTensions(required_notes, voicing_notes):
             allowed_pitches = possibleChordsSet.union(tensions)
 
             if set(intervals_voicing).issubset(allowed_pitches):
-                return True
-    return False
+                return (True, key)
+    return (False, "")
 
 # Funktion zum Überprüfen, ob ein Voicing die Kriterien erfüllt
 def check_voicing(voicing, top_note, required_notes):
@@ -300,7 +300,13 @@ def check_voicing(voicing, top_note, required_notes):
 
     required_pitches = set(note.Note(n).pitch.midi % 12 for n in required_notes)
 
-    return checkIfAvailableTensions(required_notes, all_notes) and required_pitches.issubset(voicing_pitches)
+    availableTensions = checkIfAvailableTensions(required_notes, all_notes)
+    if availableTensions[0] and availableTensions[1] != "X-7b5":
+        required_notes_copy = copy.deepcopy(required_notes)
+        del required_notes_copy[2]
+        required_pitches = set(note.Note(n).pitch.midi % 12 for n in required_notes_copy)
+        
+    return availableTensions[0] and required_pitches.issubset(voicing_pitches)
 
 import json
 import sys
