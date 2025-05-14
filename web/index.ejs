@@ -32,6 +32,13 @@
     -->
     <script>
         const indexForRoute = <%= index %>;
+
+        const url = new URL(window.location.href);
+
+        // Use URLSearchParams to access the query parameters
+        const params = new URLSearchParams(url.search);
+        const measureCount = Number(params.get('measureCount'));
+        console.log(measureCount)
     </script>
     <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
 

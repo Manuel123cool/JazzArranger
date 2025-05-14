@@ -1,8 +1,8 @@
 
-function splitIntoThrees(arr) {
+function splitIntoX(arr) {
   const result = [];
-  for (let i = 0; i < arr.length; i += 3) {
-    result.push(arr.slice(i, i + 3));
+  for (let i = 0; i < arr.length; i += measureCount) {
+    result.push(arr.slice(i, i + measureCount));
   }
   return result;
 }
@@ -47,7 +47,7 @@ function allDataAddVoicingIndeces(allData, originalData) {
   originalData.forEach((measure, index0) => {
     measure.forEach( (element, index) => {
       if (Object.hasOwn(element, 'voicingIndex') && element.voicingIndex != -1) {
-        allData.addedVoicingsIndeces.push([Math.floor(index0 / 3), index0 % 3, index, element.voicingIndex]);
+        allData.addedVoicingsIndeces.push([Math.floor(index0 / measureCount), index0 % measureCount, index, element.voicingIndex]);
       }  
     })
   })
@@ -101,14 +101,14 @@ async function syncFetch(url) {
 
       let tupletsIndeces = createTubletIndexFromJson(fetchData);
       staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData));
-      staveNotes = splitIntoThrees(staveNotes);
-      let chordNames = splitIntoThrees(getChordNames(fetchData));
-      let voicings = splitIntoThrees(getVoicings(fetchData));
+      staveNotes = splitIntoX(staveNotes);
+      let chordNames = splitIntoX(getChordNames(fetchData));
+      let voicings = splitIntoX(getVoicings(fetchData));
 
       console.log(voicings, chordNames, staveNotes, tupletsIndeces)
       let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, fetchData);
       for (let i = 0; i < staveNotes.length ; ++i) {
-        renderThreeMeasure(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign); 
+        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign); 
       }
 
     } catch (error) {

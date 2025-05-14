@@ -13,7 +13,7 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
     for (let i = 0; i < notes.length; ++i) {
         let continueVar = false;
         for (let j = 0; j < indecesTubles.length; ++j) { 
-            if (counter == 3) {
+            if (counter == measureCount) {
                 counter = 0;
             }
             if (indecesTubles[j] == i && counter > 0) {
@@ -113,6 +113,7 @@ const renderer = new Renderer(div, Renderer.Backends.SVG);
 // Configure the rendering context.
 renderer.resize(1200, 5000);
 const context = renderer.getContext();
+context.scale(0.7,0.7)
 
 // Finde das SVG-Element
 const svg = document.querySelector('svg');
@@ -150,7 +151,7 @@ svg.addEventListener('chordClick', (e) => {
     const groupIndex = e.detail.chordPosition[2]
     const measureInGroupIndex = e.detail.chordPosition[0]
     const noteIndex = e.detail.chordPosition[1]
-    const measureIndex = groupIndex * 3 + measureInGroupIndex;
+    const measureIndex = groupIndex * measureCount + measureInGroupIndex;
 
     if (e.detail.allData.chordNames[groupIndex][measureInGroupIndex][noteIndex] != "Unknown chord") {
         if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
@@ -178,12 +179,12 @@ svg.addEventListener('chordClick', (e) => {
                 }
              }
 
-             if (lastAddedVoicingIndex != null && e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3] < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length - 1) {
+             if (lastAddedVoicingIndex != null) {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
 
                 voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex)
             }
-            
+
              // Voicings hinzufügen (falls vorhanden)
              if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
                 for (let m = 0; m < e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][1].length; ++m) {
@@ -216,7 +217,7 @@ svg.addEventListener('chordClick', (e) => {
     }
     isClicked = true;
     for (let i = 0; i < e.detail.allData.staveNotes.length ; ++i) {
-        renderThreeMeasure(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber); 
+        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber); 
     }
     isClicked = false;
 
@@ -588,6 +589,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     });
 
     let processedTrebleNotes = annotatedTrebleNotes.map((note, noteIndex) => {
+        const measureIndexAbsolute = measureIndex + lineIndex * measureCount;
         let lastAddedVoicingIndex = -1;
         for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
             if (JSON.stringify(allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([lineIndex, measureIndex , noteIndex])) {
@@ -596,15 +598,21 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         }
 
         if (!note.isRest()) {
-            if (lastAddedVoicingIndex > originalData[measureIndex + lineIndex * 3][noteIndex].voicings.length - 1) {
-                return addAccidental([originalData[measureIndex][noteIndex].oneNote], note)
+            if (lastAddedVoicingIndex > originalData[measureIndexAbsolute][noteIndex].voicings.length - 1) {
+                return addAccidental([originalData[measureIndexAbsolute][noteIndex].oneNote], note)
             }
-            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][1] : [originalData[measureIndex][noteIndex].oneNote], note)
+
+            if (noteIndex == 5) {
+                console.log("oino")
+            }
+            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndexAbsolute][noteIndex].voicings[lastAddedVoicingIndex][1] : [originalData[measureIndexAbsolute][noteIndex].oneNote], note)
         }
         return note;
     });
 
     let processedBassNotes = bassStaveNotes.map((note, noteIndex) => {
+        const measureIndexAbsolute = measureIndex + lineIndex * measureCount;
+
         let lastAddedVoicingIndex = -1;
         for (let i = 0; i < allData.addedVoicingsIndeces.length; ++i) {
             if (JSON.stringify(allData.addedVoicingsIndeces[i].slice(0, 3)) === JSON.stringify([lineIndex, measureIndex , noteIndex])) {
@@ -613,16 +621,16 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         }
 
         if (!note.isRest()) {
-            const voicingsLength = originalData[measureIndex + lineIndex * 3][noteIndex].voicings.length
+            const voicingsLength = originalData[measureIndexAbsolute][noteIndex].voicings.length
             if (lastAddedVoicingIndex >  voicingsLength - 1 && lastAddedVoicingIndex != -1) {
-                return addAccidental(originalData[measureIndex + lineIndex * 3][noteIndex].leftHandVoicings[lastAddedVoicingIndex - voicingsLength][0], note)
+                return addAccidental(originalData[measureIndexAbsolute][noteIndex].leftHandVoicings[lastAddedVoicingIndex - voicingsLength][0], note)
             }
-            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndex + lineIndex * 3][noteIndex].voicings[lastAddedVoicingIndex][0] : [originalData[measureIndex][noteIndex].oneNote], note)
+            return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndexAbsolute][noteIndex].voicings[lastAddedVoicingIndex][0] : [originalData[measureIndex][noteIndex].oneNote], note)
         }
         return note;
     });
 
-    let combineResult  = combineRests(processedBassNotes, allData.tupletsIndeces,  measureIndex + lineIndex * 3);
+    let combineResult  = combineRests(processedBassNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
     const bassTupletIndeces = combineResult.newTupletIndeces;
     processedBassNotes =  combineResult.newNotes;
 
@@ -631,13 +639,13 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     // Integrate NoteGrouper for treble notes
     
-    const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * 3, processedTrebleNotes);
+    const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
 
     const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
-    const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * 3, processedBassNotes)
+    const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes)
     const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
@@ -730,9 +738,9 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 }
 
 // Angepasste renderThreeMeasure-Funktion
-function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign) {
+function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign) {
     // Fülle leere Takte mit Viertelpausen
-    for (let i = musicElements.length; i < 3; ++i) {
+    for (let i = musicElements.length; i < measureCount; ++i) {
         musicElements.push([
             new StaveNote({ clef: "treble", keys: ["b/4"], duration: "wr" })
         ]);
@@ -805,7 +813,8 @@ function renderThreeMeasure(musicElements, yOffset, lineIndex, chordNames, allDa
         }               
     }
     const leftOffset = 5;
-    renderOneMeasure(musicElementsBase[0], musicElements[0], 0 + leftOffset, yOffset, true, keySign, chordNames[0], allData, 0, lineIndex, originalData);
-    renderOneMeasure(musicElementsBase[1], musicElements[1], 350 + leftOffset, yOffset, false, keySign, chordNames[1], allData, 1, lineIndex, originalData);
-    renderOneMeasure(musicElementsBase[2], musicElements[2], 700 + leftOffset, yOffset, false, keySign, chordNames[2], allData, 2, lineIndex, originalData);
+
+    for (let i = 0; i < measureCount; ++i) {
+        renderOneMeasure(musicElementsBase[i], musicElements[i], 350 * i + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData);
+    }
 }
