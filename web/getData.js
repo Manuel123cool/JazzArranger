@@ -94,6 +94,7 @@ async function syncFetch(url) {
       fetchData = await syncFetch('http://localhost:3000/data/' + indexForRoute); // Example API
       console.log("fetchDATE", fetchData)
       keySign = fetchData["keySign"]
+      let timeSign = fetchData["timeSign"]
       fetchData = fetchData["noteInfo"]
 
       
@@ -108,7 +109,7 @@ async function syncFetch(url) {
       console.log(voicings, chordNames, staveNotes, tupletsIndeces)
       let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, fetchData);
       for (let i = 0; i < staveNotes.length ; ++i) {
-        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign); 
+        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign, timeSign); 
       }
 
     } catch (error) {

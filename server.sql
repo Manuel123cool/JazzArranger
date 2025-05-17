@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS score (
   time_signature_id INTEGER,
   CONSTRAINT fk_score_time_signature
       FOREIGN KEY (time_signature_id)
-      REFERENCES time_signature(time_signature_id)
+      REFERENCES time_signature(time_signature_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS measure (

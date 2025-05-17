@@ -10,7 +10,10 @@ function isGhostNote(note) {
     return note.attrs.type === "GhostNote";
 }
 
-function createBeamEights(notes, notesTriplets, indecesTubles) {
+function createBeamEights(notes, notesTriplets, indecesTubles, isWaltsSign = false) {
+    if (isWaltsSign) {
+        return createBeamEightsWaltsSign(notes, notesTriplets, indecesTubles);
+    }
     const possibleBeams = [[-1, 2048, 2048, 2048], [2048, 2048, 2048, -1], [-1, 2048, 2048, -1],  [-1, -1, 2048, 2048], [2048, 2048, -1, -1], [2048, 2048, 2048, 2048]]
     
     let noLongerThanEights = [];
@@ -108,6 +111,25 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
         return [beamGroup2]
     }
     return []
+}
+
+function createBeamEightsWaltsSign(notes, notesTriplets, indecesTubles) { 
+    function isEightsNote(note) {
+        return note.getTicks().value() === 2048 && !note.isRest()
+    }   
+
+    let beamGroups= []
+    
+    let allNotesTicks = 0;
+    for (let i = 0; i < notes.length; ++i) {
+        if (allNotesTicks % (2048 * 2) === 0) {
+            if (isEightsNote(notes[i]) && i + 1 < notes.length && isEightsNote(notes[i + 1])) {
+                beamGroups.push([notes[i], notes[i + 1]])
+            }
+        }
+        allNotesTicks += notes[i].getTicks().value();
+    }
+    return beamGroups
 }
 
 // Create an SVG renderer and attach it to the DIV element named "output".
@@ -221,7 +243,7 @@ svg.addEventListener('chordClick', (e) => {
     }
     isClicked = true;
     for (let i = 0; i < e.detail.allData.staveNotes.length ; ++i) {
-        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber); 
+        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber, e.detail.timeSign); 
     }
     isClicked = false;
 
@@ -584,7 +606,11 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes) {
     return tupletGroups;
 }
 // Angepasste renderOneMeasure-Funktion
-function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData) {
+const measureWidth = 400;
+
+
+function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, staveWidth = measureWidth) {
+    
     const keySignatureMap = {
         '-7': 'Cb', '-6': 'Gb', '-5': 'Db', '-4': 'Ab', '-3': 'Eb', '-2': 'Bb', '-1': 'F',
         '0': 'C', '1': 'G', '2': 'D', '3': 'A', '4': 'E', '5': 'B', '6': 'F#', '7': 'C#'
@@ -594,15 +620,15 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     bassStaveNotes = removeRedundantAccidentals(bassStaveNotes, keySignature);
     trebleStaveNotes = removeRedundantAccidentals(trebleStaveNotes, keySignature);
 
-    const trebleStave = new Stave(10 + xOffset, 40 + yOffset, 350);
+    const trebleStave = new Stave(10 + xOffset, 40 + yOffset, staveWidth);
     if (isFirstMeasure) {
-        trebleStave.addClef("treble").addKeySignature(keySignature).addTimeSignature("4/4");
+        trebleStave.addClef("treble").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
     }
     trebleStave.setContext(context).draw();
 
-    const bassStave = new Stave(10 + xOffset, 140 + yOffset, 350);
+    const bassStave = new Stave(10 + xOffset, 140 + yOffset, staveWidth);
     if (isFirstMeasure) {
-        bassStave.addClef("bass").addKeySignature(keySignature).addTimeSignature("4/4");
+        bassStave.addClef("bass").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
     }
     bassStave.setContext(context).draw();
 
@@ -680,16 +706,17 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     // Integrate NoteGrouper for treble notes
     
     const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
-    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount]), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
+
+    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator == 3), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
     const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes)
-    const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces, timeSign.numerator == 3), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
-    const trebleVoice = new Voice({ num_beats: 4, beat_value: 4 });
-    const bassVoice = new Voice({ num_beats: 4, beat_value: 4 });
+    const trebleVoice = new Voice({ num_beats: timeSign.numerator, beat_value: timeSign.denominator });
+    const bassVoice = new Voice({ num_beats: timeSign.numerator, beat_value: timeSign.denominator });
     trebleVoice.setStrict(false); // Ermöglicht komplexere Rhythmen
 
     trebleVoice.addTickables(processedTrebleNotes);
@@ -698,12 +725,19 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     bassVoice.addTickables(processedBassNotes);
 
     const formatter = new Formatter();
-    formatter.joinVoices([trebleVoice]).joinVoices([bassVoice]);
-    formatter.formatToStave([trebleVoice, bassVoice], trebleStave, { align_rests: false });
 
-    // Draw the voices and beams
+    formatter.joinVoices([trebleVoice]).joinVoices([bassVoice]);
+    formatter.formatToStave([trebleVoice, bassVoice], trebleStave, { align_rests: false, stave: trebleStave});
+
+    console.log(formatter.preCalculateMinTotalWidth())
+    
+    if (formatter.preCalculateMinTotalWidth() > staveWidth) {
+        return renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, staveWidth + 10)
+    }
+
     trebleVoice.draw(context, trebleStave);
     bassVoice.draw(context, bassStave);
+
     trebleBeams.forEach(beam => beam.setContext(context).draw());
     bassBeams.forEach(beam => beam.setContext(context).draw());
 
@@ -757,7 +791,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                 rect.addEventListener('click', () => {
                     console.log(`Akkord ${chordText} wurde geklickt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -767,7 +801,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                     e.preventDefault();
                     console.log(`Akkord ${chordText} wurde getippt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -777,7 +811,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 }
 
 // Angepasste renderThreeMeasure-Funktion
-function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign) {
+function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign, timeSign) {
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < measureCount; ++i) {
         musicElements.push([
@@ -854,6 +888,6 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
     const leftOffset = 5;
 
     for (let i = 0; i < measureCount; ++i) {
-        renderOneMeasure(musicElementsBase[i], musicElements[i], 350 * i + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData);
+        renderOneMeasure(musicElementsBase[i], musicElements[i], measureWidth * i + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign);
     }
 }
