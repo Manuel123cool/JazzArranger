@@ -1,6 +1,13 @@
 
+const { Renderer, Stave, StaveNote, Voice, Formatter, StaveConnector, Accidental, Annotation, Beam, GhostNote } = VexFlow;
+
 function isTuplet(obj) {
     return obj instanceof VF.Tuplet;
+}
+
+function isGhostNote(note) {
+    // Durchsuche die Modifier der Note
+    return note.attrs.type === "GhostNote";
 }
 
 function createBeamEights(notes, notesTriplets, indecesTubles) {
@@ -9,31 +16,30 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
     let noLongerThanEights = [];
     let allNotesTicks = [];
 
-    let counter = 0;
+    let  = false;
     for (let i = 0; i < notes.length; ++i) {
+        if (isGhostNote(notes[i])) {
+            continue;
+        }
         let continueVar = false;
         for (let j = 0; j < indecesTubles.length; ++j) { 
-            if (counter == measureCount) {
-                counter = 0;
-            }
-            if (indecesTubles[j] == i && counter > 0) {
-                counter += 1;
-                continueVar = true
-            }
-            if (indecesTubles[j].length > 0 && indecesTubles[j] == i && counter == 0) {
+            
+            if (indecesTubles[j].length > 0 && indecesTubles[j][1] == i) {
                 noLongerThanEights.push(-1);
                 noLongerThanEights.push(-1);
 
                 allNotesTicks.push(2048 * 2)
-
-                counter += 1;
-                continueVar = true
+            
+                i += 3;
+                continueVar = true;
+                continue;
             }
         }
         if (continueVar) {
+            continueVar = false;
             continue
         }
-        if (notes[i].isRest() || notes[i].getTicks().value() != 2048) {
+        if (notes[i].isRest() ||  notes[i].getTicks().value() != 2048) {
             allNotesTicks.push(notes[i].getTicks().value())
             const addedEightRests = notes[i].getTicks().value() / 2048
             for (let j = 0; j < addedEightRests; ++j) {
@@ -103,8 +109,6 @@ function createBeamEights(notes, notesTriplets, indecesTubles) {
     }
     return []
 }
-
-const { Renderer, Stave, StaveNote, Voice, Formatter, StaveConnector, Accidental, Annotation, Beam } = VexFlow;
 
 // Create an SVG renderer and attach it to the DIV element named "output".
 const div = document.getElementById("output");
@@ -226,7 +230,25 @@ svg.addEventListener('chordClick', (e) => {
 
 // Funktion bleibt unverändert
 function removeRedundantAccidentals(notes, keySignature) {
-    const keyAccidentals = {};
+    const keySignatureAccidentals = {
+        'Cb': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b', 'C': 'b', 'F': 'b' },
+        'Gb': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b', 'C': 'b' },
+        'Db': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b', 'G': 'b' },
+        'Ab': { 'B': 'b', 'E': 'b', 'A': 'b', 'D': 'b' },
+        'Eb': { 'B': 'b', 'E': 'b', 'A': 'b' },
+        'Bb': { 'B': 'b', 'E': 'b' },
+        'F': { 'B': 'b' },
+        'C': {},
+        'G': { 'F': '#' },
+        'D': { 'F': '#', 'C': '#' },
+        'A': { 'F': '#', 'C': '#', 'G': '#' },
+        'E': { 'F': '#', 'C': '#', 'G': '#', 'D': '#' },
+        'B': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#' },
+        'F#': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#', 'E': '#' },
+        'C#': { 'F': '#', 'C': '#', 'G': '#', 'D': '#', 'A': '#', 'E': '#', 'B': '#' }
+    };
+
+    const keyAccidentals = keySignatureAccidentals[keySignature] || {};
 
     return notes.map(note => {
         const newKeys = note.getKeys().map(key => {
@@ -236,7 +258,7 @@ function removeRedundantAccidentals(notes, keySignature) {
             const keyAccidental = keyAccidentals[baseNote] || null;
 
             if (accidental && accidental === keyAccidental) {
-                return `${baseNote.toLowerCase()}/${octave}`;
+                return `${baseNote.toUpperCase()}/${octave}`;
             }
             return key;
         });
@@ -457,12 +479,13 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
         } else {
             // Kombinieren von Pausen
             let combinedTicks = 0;
+            let tickPositionsTuplet = [];
             for (let j = 0; j < group.length; ++j) {
                 let item = group[j];
                 
                 let startTupletCount = 0
 
-                for (let k = j; k < 3 && k < group.length; ++k) {
+                for (let k = j; k < j + 3 && k < group.length; ++k) {
                     if (group[k].hasOwnProperty("tupletIndex")) {
                         startTupletCount += 1; 
                     } else {
@@ -473,9 +496,14 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
 
                 if (startTupletCount === 3) {
                     combinedTicks += item.note.getTicks().value() * 2;
-                    
+                    tickPositionsTuplet.push(combinedTicks);
+
                     if (item.hasOwnProperty("tupletIndex")) {
-                        newTupletIndeces[measureIndex].splice(item.tupletIndex, 3); 
+                        newTupletIndeces[measureIndex].splice(item.tupletIndex , 3);  
+                        for (let k = j + 3; k < group.length; ++k) {
+                            if (group[k].hasOwnProperty("tupletIndex"))
+                                group[k].tupletIndex -= 3;
+                        }  
                     }
                     
                     j += 2;
@@ -484,7 +512,7 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
                 combinedTicks += item.note.getTicks().value();
             }
             // Erstelle eine neue StaveNote mit der korrekten Dauer
-            //{"closestDuration": closestDuration, "equalDuration": equalDuration}
+            
             let durationObj = ticksToDuration(combinedTicks);
             let currentDurationObj = durationObj;
             let remainingTicks = combinedTicks;
@@ -507,6 +535,21 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
                     }
                 }
             } while (remainingTicks !== 0)
+            
+            let combinedTicksForGhost = 0;
+            for (let j = 0; j < newNotes.length; ++j) {
+                combinedTicksForGhost += newNotes[i].getTicks().value()
+                if (tickPositionsTuplet.length > 0 && combinedTicksForGhost > tickPositionsTuplet[0]) {
+                    tickPositionsTuplet.shift();
+
+                    const ghost = new VF.GhostNote({
+                        duration: "8" // quarter note
+                    });
+                    newNotes.splice(j + 1, 0, ghost);
+                    j + 1;
+                }
+            }
+            
         }
     }
 
@@ -602,9 +645,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                 return addAccidental([originalData[measureIndexAbsolute][noteIndex].oneNote], note)
             }
 
-            if (noteIndex == 5) {
-                console.log("oino")
-            }
             return addAccidental(lastAddedVoicingIndex != -1 ? originalData[measureIndexAbsolute][noteIndex].voicings[lastAddedVoicingIndex][1] : [originalData[measureIndexAbsolute][noteIndex].oneNote], note)
         }
         return note;
@@ -640,8 +680,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     // Integrate NoteGrouper for treble notes
     
     const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
-
-    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount]), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes

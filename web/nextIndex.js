@@ -74,7 +74,7 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
         let returnOctaves = [];
 
         if (currentIndex == leftHandedVoicings.length + twoHandedVoicings.length - 1) {
-            currentIndex = 0;
+            currentIndex = twoHandedVoicings.length;
         }
 
         for (let i = currentIndex; i < leftHandedVoicings.length + twoHandedVoicings.length; ++i) {
@@ -99,6 +99,8 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
         }
         if (returnIndex !== -1) return returnIndeces[returnIndex]
 
+        return currentIndex
+
     } else if (leftHandedVoicings.length > 0 && Number(mode) == 3) {
         return twoHandedVoicings.length 
     }
@@ -109,7 +111,7 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
         let returnOctaves = [];
 
         if (currentIndex == leftHandedVoicings.length + twoHandedVoicings.length - 1) {
-            currentIndex = 0;
+            currentIndex = twoHandedVoicings.length;
         }
 
         for (let i = currentIndex; i < leftHandedVoicings.length + twoHandedVoicings.length; ++i) {
@@ -146,7 +148,7 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
         let returnOctaves = [];
 
         if (currentIndex == leftHandedVoicings.length + twoHandedVoicings.length - 1) {
-            currentIndex = 0;
+            currentIndex = twoHandedVoicings.length;
         }
 
         for (let i = currentIndex + 1; i < leftHandedVoicings.length + twoHandedVoicings.length; ++i) {

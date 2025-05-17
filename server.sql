@@ -14,11 +14,21 @@ CREATE TABLE IF NOT EXISTS note (
     is_rest BOOLEAN
 );
 
+CREATE TABLE time_signature (
+    time_signature_id INT PRIMARY KEY,
+    numerator INT NOT NULL,  -- e.g., 4 for 4/4
+    denominator INT NOT NULL,  -- e.g., 4 for 4/4
+);
+
 CREATE TABLE IF NOT EXISTS score (
   score_id SERIAL PRIMARY KEY,
   file_name varchar(255),
   stored_name varchar(255),
-  key_sign int
+  key_sign int,
+  time_signature_id INTEGER,
+  CONSTRAINT fk_score_time_signature
+      FOREIGN KEY (time_signature_id)
+      REFERENCES time_signature(time_signature_id)
 );
 
 CREATE TABLE IF NOT EXISTS measure (
@@ -60,7 +70,7 @@ CREATE TABLE IF NOT EXISTS measure_elem (
 
   voicing_index integer,
   voicing_index_left_hand integer,
-  
+
   CONSTRAINT fk_measure
       FOREIGN KEY(measure_id)
         REFERENCES measure(measure_id) ON DELETE CASCADE

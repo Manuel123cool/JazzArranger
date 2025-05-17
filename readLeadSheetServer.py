@@ -37,7 +37,7 @@ def create_note_to_midi_map(start_octave=0, end_octave=8):
 
 midi_map = create_note_to_midi_map()
 
-def check_voicing_midi(voicing, top_note, required_notes):
+def check_voicing_midi(voicing, top_note, required_notes, exceptRightHand = False):
     # Rechte Hand (zweite Liste) prüfen
     right_hand = voicing[1] if len(voicing) > 1 and voicing[1] else []
     if not right_hand:
@@ -53,7 +53,9 @@ def check_voicing_midi(voicing, top_note, required_notes):
     
     # Alle Noten des Voicings (linke + rechte Hand)
     all_notes = []
-    for hand in voicing:
+    for index, hand in enumerate(voicing):
+        if exceptRightHand and index == True:
+            continue
         all_notes.extend(hand)
 
     # Akkordtöne prüfen
@@ -122,21 +124,6 @@ def get_all_chromatic_notes():
         chromatic_notes.append(current_pitch.nameWithOctave)
     
     return chromatic_notes
-
-def create_notes_with_root_c_as_list():
-    root_note_midi = 60  # MIDI-Nummer für C4
-    chords_notes_list = []  # Liste zur Speicherung der Noten für jeden Akkordtyp
-    
-    # Durchlaufe alle Akkordtypen in possibleChords
-    for chord_type, intervals in possibleChords.items():
-        # Erstelle die MIDI-Nummern für den Akkord basierend auf den Intervallen
-        chord_midi_notes = [root_note_midi + interval for interval in intervals]
-        # Erstelle eine Liste von music21.note.Note-Objekten für den aktuellen Akkord
-        note_objects = [note.Note(midi=midi) for midi in chord_midi_notes]
-        # Füge die Liste der Noten zur Gesamtliste hinzu
-        chords_notes_list.append(note_objects)
-    
-    return chords_notes_list
 
 def transpose_voicing_midi(voicing, intervalPar, withImpliedNotes = False):
     transposed_voicing = []
@@ -314,11 +301,8 @@ def relativeKeysOfVoicingMidi(voicing, keySign, definingNotes):
     notes2 = voicing[1]
 
     import time
-    t1 = time.perf_counter(), time.process_time()
     
     isSharp = is_sharp_midi_optimized(definingNotes)
-
-    t2 = time.perf_counter(), time.process_time()
 
     #print(f" Real time: {t2[0] - t1[0]:.2f} seconds")
     
@@ -336,10 +320,6 @@ def relativeKeysOfVoicingMidi(voicing, keySign, definingNotes):
 
     
     return reVoicing
-
-def getNoteFromMidiNumber(midiNote):
-    note_names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
-    return note_names[midiNote % 12] + str(octave(midiNote))
 
 SHARP_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 FLAT_NOTE_NAMES  = ["C", "D-", "D", "E-", "E", "F", "G-", "G", "A-", "A", "B-", "B"]
@@ -380,10 +360,15 @@ def getNoteFromMidiNumber(midiNote, prefer_sharps=True):
         
     return note_base_name + str(octave_number)
 
-def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
-    required_notes = [midi_map[noteStr] for noteStr in required_notes]
-    top_note = midi_map[top_note]
+def absoluteKeysOfVoicingMidi(voicing):
+    reVoicing = {}
+    reVoicing["rightHand"] = [getNoteFromMidiNumber(midiNote) for midiNote in voicing["rightHand"]]
+    reVoicing["leftHand"] = [getNoteFromMidiNumber(midiNote) for midiNote in voicing["leftHand"]]
+    reVoicing["impliedNotes"] = [getNoteFromMidiNumber(midiNote) for midiNote in voicing["impliedNotes"]]
 
+    return reVoicing
+
+def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
     def makeInversions(voicing):
         inversedVoicings = [voicing]
 
@@ -436,39 +421,26 @@ def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
             #print("rightHand")
             newVoicing = copy.deepcopy(voicing)
             newVoicing["rightHand"] = [top_note]
-            newVoicing["leftHand"] = [midi_map[noteStr.replace("b", "-")] for noteStr in voicing["leftHand"]]
-    
-            newVoicing["impliedNotes"] = [midi_map[noteStr.replace("b", "-")] for noteStr in voicing["impliedNotes"]]
 
             for intervalForTranspose in range(-7, 8):
                 newVoicingTransposed =  transpose_voicing_midi(newVoicing, intervalForTranspose, True)
                 newVoicingTransposed[1] = [top_note]
 
-                if check_voicing_midi(newVoicingTransposed, top_note, required_notes):
+                if check_voicing_midi(newVoicingTransposed, top_note, required_notes, True):
                     inversions = [{"leftHand": inversion, "rightHand": newVoicingTransposed[1], "impliedNotes": newVoicingTransposed[2]} for inversion in makeInversions(newVoicingTransposed[0])]
 
                     octaves = makeOctaves(inversions)
 
-                    import time
-                    t1 = time.perf_counter(), time.process_time()
-                    
-                    
                     relativeVoicings = []
                     for inversion in octaves:
                         relativeVoicings.append([])
                         for octaveV in inversion:
                             relativeVoicings[-1].append(relativeKeysOfVoicingMidi(transpose_voicing_midi(octaveV, 0, True), keySign, required_notes))
 
-                    t2 = time.perf_counter(), time.process_time()
-
-                    #print(f" Real time: {t2[0] - t1[0]:.2f} seconds")
-
                     for indexInversion in range(len(octaves)):
                         relativeVoicings.append([])
                         for indexOctave in range(len(octaves[indexInversion])):
-                            octaves[indexInversion][indexOctave]["rightHand"] = [getNoteFromMidiNumber(midiNote) for midiNote in octaves[indexInversion][indexOctave]["rightHand"]]
-                            octaves[indexInversion][indexOctave]["leftHand"] = [getNoteFromMidiNumber(midiNote) for midiNote in octaves[indexInversion][indexOctave]["leftHand"]]
-                            octaves[indexInversion][indexOctave]["impliedNotes"] = [getNoteFromMidiNumber(midiNote) for midiNote in octaves[indexInversion][indexOctave]["impliedNotes"]]
+                            octaves[indexInversion][indexOctave] = absoluteKeysOfVoicingMidi(octaves[indexInversion][indexOctave])
 
                     possibleLeftHandChords.append({"absolute": octaves, "relative": relativeVoicings})
                     break
@@ -491,19 +463,6 @@ def getAllVoicings():
     except requests.exceptions.RequestException as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
 
-
-def getRelativeNoteToKey(note, keySignNum):
-    note = copy.deepcopy(note)
-    keySign = key.KeySignature(keySignNum)
-    scale_pitches = [p.midi % 12 for p in keySign.getScale().pitches]
-
-    if note.pitch.midi % 12 in scale_pitches:
-        note.pitch.accidental = None
-        return (note, Eccidental.NONE)
-    elif note.pitch.accidental is None:
-        return (note, Eccidental.NATURAL)
-    
-    return (note, Eccidental.TRUE)
 
 def analyze_lead_sheet(score, keySign):
     returnArray = []
@@ -554,13 +513,20 @@ def analyze_lead_sheet(score, keySign):
             from fractions import Fraction
             if isinstance(elem_length, Fraction):
                 elem_length = {"numerator": elem_length.numerator, "denominator": elem_length.denominator}
-            
-            relative_to_key = (getRelativeNoteToKey(elem, keySign)[0].nameWithOctave, getRelativeNoteToKey(elem, keySign)[1].value) if elem_name != "Rest" else ("Rest", -1)
 
+
+            relative_to_key = None
+            if not(elem.isRest):
+                noteKey = getNoteFromMidiNumber(elem.pitch.midi, "#" in elem.name)
+                hasAccidental = "-" in noteKey or "#" in noteKey
+
+                relative_to_key = (noteKey, Eccidental.NATURAL.value) if (get_note_status_in_key_midi(elem.pitch.midi, keySign)[1] == MidiAccidentalStatus.CHROMATIC_OUT_OF_KEY and not(hasAccidental)) else (noteKey, Eccidental.NONE.value)
+            else:
+                relative_to_key = ("Rest", -1)
+
+            
             if matching_chord:
-                chord_name = matching_chord.commonName
                 chord_pitches = [p.nameWithOctave for p in matching_chord.pitches]
-                chord_details = f"[{', '.join(chord_pitches)}]"
 
 
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": chord_pitches, "elem_length": elem_length, "relative_to_key":  relative_to_key})
@@ -586,189 +552,20 @@ availableTensions = {
     "X-7b5": [2, 5, 8]
 }
 
-def transpose_voicing(voicing, intervalPar, withImpliedNotes = False):
-    transposed_voicing = []
-    transposed_voicing.append(chord.Chord(voicing["leftHand"]).transpose(intervalPar))
-    transposed_voicing.append(chord.Chord(voicing["rightHand"]).transpose(intervalPar))
-    if withImpliedNotes:
-        transposed_voicing.append(chord.Chord(voicing["impliedNotes"]).transpose(intervalPar))
-        return [[note.nameWithOctave for note in transposed_voicing[0]], [note.nameWithOctave for note in transposed_voicing[1]], [note.nameWithOctave for note in transposed_voicing[2]]]
-
-    return [[note.nameWithOctave for note in transposed_voicing[0]], [note.nameWithOctave for note in transposed_voicing[1]]]
-
-
-def checkIfAvailableTensions(required_notes, voicing_notes):
-    intervals_required = []
-    for n in required_notes:
-        intervals_required.append((note.Note(n).pitch.midi - note.Note(required_notes[0]).pitch.midi))
-        while intervals_required[-1] > 12:
-            intervals_required[-1] -= 12
-
-    intervals_voicing = []
-
-    ref_note = None
-    for voicing_note in voicing_notes:
-        if note.Note(voicing_note).pitch.midi % 12 == note.Note(required_notes[0]).pitch.midi % 12:
-            ref_note = note.Note(voicing_note).pitch.midi
-
-    if ref_note == None:
-        return (False, "")
-    
-    for n in voicing_notes:
-        intervals_voicing.append((note.Note(n).pitch.midi - ref_note))
-        while intervals_voicing[-1] < 0:
-            intervals_voicing[-1] += 12
-
-        while intervals_voicing[-1] > 12:
-            intervals_voicing[-1] -= 12
-
-    intervals_voicing = set(intervals_voicing)
-    intervals_required = set(intervals_required)
-
-    for key, value in possibleChords.items():
-        possibleChordsSet = set(value)
-
-        if possibleChordsSet == intervals_required:
-
-            # Erlaubte Tensionen hinzufügen
-            tensions = set(availableTensions[key])
-            allowed_pitches = possibleChordsSet.union(tensions)
-
-            if set(intervals_voicing).issubset(allowed_pitches):
-                return (True, key)
-    return (False, "")
-
-# Funktion zum Überprüfen, ob ein Voicing die Kriterien erfüllt
-def check_voicing(voicing, top_note, required_notes):
-    # Rechte Hand (zweite Liste) prüfen
-    right_hand = voicing[1] if len(voicing) > 1 and voicing[1] else []
-    if not right_hand:
-        return False
-    
-    # TopNote ist die letzte Note der rechten Hand
-    voicing_top_note = note.Note(right_hand[-1])
-    
-    # TopNote prüfen (nur Tonhöhe, Oktave ignorieren)
-    top_note_pitch = note.Note(top_note).pitch.midi % 12
-    if voicing_top_note.pitch.midi % 12 != top_note_pitch:
-        return False
-    
-    # Alle Noten des Voicings (linke + rechte Hand)
-    all_notes = []
-    for hand in voicing:
-        all_notes.extend(hand)
-
-    # Akkordtöne prüfen
-    voicing_pitches = set(note.Note(n).pitch.midi % 12 for n in all_notes)
-
-    required_pitches = set(note.Note(n).pitch.midi % 12 for n in required_notes)
-
-    availableTensions = checkIfAvailableTensions(required_notes, all_notes)
-    if availableTensions[0] and availableTensions[1] != "X-7b5":
-        required_notes_copy = copy.deepcopy(required_notes)
-        del required_notes_copy[2]
-        required_pitches = set(note.Note(n).pitch.midi % 12 for n in required_notes_copy)
-        
-    return availableTensions[0] and required_pitches.issubset(voicing_pitches)
-
 import json
 import sys
-
-def is_sharp(note_list):
-    if not(note_list):
-        return None
-    #note_list = chord.Chord(["B-4", "D5", "F5", "A5"])
-    # Iteriere über alle möglichen KeySignatures
-    countNoAccidentals = 0
-
-    allSharpKey = []
-    for sharps in range(1, 8):  # Von 7 ♭ bis 7 ♯
-        newCount = 0
-        tonality = key.KeySignature(sharps).asKey().getScale().pitches
-        
-        for p in tonality:
-            for n in note_list:
-                if p.midi % 12 == n.pitch.midi % 12:
-                    newCount += 1
-
-        if newCount >= len(note_list):
-            allSharpKey.append(sharps)
-
-    allFlatKey = []
-    for flats in range(-7, -1):  # Von 7 ♭ bis 7 ♯
-        newCount = 0
-        tonality = key.KeySignature(flats).asKey().getScale().pitches
-        
-        for p in tonality:
-            for n in note_list:
-                if p.midi % 12 == n.pitch.midi % 12:
-                    newCount += 1
-
-        if newCount >= len(note_list):
-            allFlatKey.append(flats)
-
-    tonality = key.KeySignature(0).asKey().getScale().pitches
-        
-    newCount = 0
-    for p in tonality:
-        for n in note_list:
-            if p.midi % 12 == n.pitch.midi % 12:
-                newCount += 1
-
-    if newCount >= len(note_list):
-        countNoAccidentals += 1
-
-    if len(allSharpKey) > len(allFlatKey) and len(allSharpKey) > countNoAccidentals:
-        return True
-    elif len(allFlatKey) > len(allSharpKey) and len(allFlatKey) > countNoAccidentals:
-        return False
-    else:
-        return None
-
-def adjust_chord_to_key(chord_obj, use_sharps=True):
-    """
-    Passt die Vorzeichen eines Akkords an die gewünschte Tonart (mit # oder b) an.
-    """
-    for n in chord_obj:
-        if n.pitch.accidental == None:
-            continue
-        if use_sharps and n.pitch.accidental.name == "flat":            
-            n.pitch = n.pitch.getEnharmonic()
-        elif not(use_sharps) and n.pitch.accidental.name == "sharp":
-            n.pitch = n.pitch.getEnharmonic()
-
-    return chord_obj
-
-def relativeKeysOfVoicing(voicing, keySign, definingNotes):
-    reVoicing = [[], []]
-
-    from music21 import note
-    notes1 = [note.Note(n) for n in voicing[0]]
-    notes2 = [note.Note(n) for n in voicing[1]]
-    definingNotes = [note.Note(n) for n in definingNotes]
-
-    reVoicing[0] = adjust_chord_to_key(notes1, is_sharp(definingNotes))
-    reVoicing[1] = adjust_chord_to_key(notes2, is_sharp(definingNotes))
-    
-    for index, n in enumerate(reVoicing[0]):
-        reVoicing[0][index] = (getRelativeNoteToKey(n, keySign)[0].nameWithOctave, getRelativeNoteToKey(n, keySign)[1].value)
-    
-    for index, n in enumerate(reVoicing[1]):
-        reVoicing[1][index] = (getRelativeNoteToKey(n, keySign)[0].nameWithOctave, getRelativeNoteToKey(n, keySign)[1].value)
-
-    return reVoicing
-    
 
 def rePossibleVoicings(result, keySign, voicings):
     # Voicings für jeden Akkord finden
     for index, oneMeasure in enumerate(result):
         for index1, oneNoteInfo in enumerate(oneMeasure):
-            top_note = oneNoteInfo['elem_name']
-            chord_notes = oneNoteInfo['chord_details']
+            chord_notes = [midi_map[note_detail.replace("b", "-")] for note_detail in oneNoteInfo['chord_details']]
             
             if len(chord_notes) == 0:
                 continue
-            
+
+            top_note = midi_map[oneNoteInfo['elem_name']]
+
             # Akkordnoten und Wurzelnote berechnen
             required_notes = chord_notes
             root_note = chord_notes[0]
@@ -782,15 +579,17 @@ def rePossibleVoicings(result, keySign, voicings):
                 if voicing["rightHand"][0] == "ANY": continue
                 
                 # Top note als reference
-                ref_note = note.Note(voicing["rightHand"][-1]) if voicing["rightHand"] else note.Note('C3')
-                interval = note.Note(top_note).pitch.midi - ref_note.pitch.midi
+                ref_note = voicing["rightHand"][-1]
+                interval = top_note - ref_note
                 # Voicing transponieren
-                transposed_voicing = transpose_voicing(voicing, interval, True)
+                transposed_voicing = transpose_voicing_midi(voicing, interval, True)
 
                 # Kriterien prüfen
-                if check_voicing(transposed_voicing, top_note, required_notes):
-                    matching_voicings.append(transposed_voicing)
-                    matching_voicings_relative.append(relativeKeysOfVoicing(transposed_voicing, keySign, required_notes))
+                if check_voicing_midi(transposed_voicing, top_note, required_notes):
+                    input_voicing = {"leftHand": transposed_voicing[0], "rightHand": transposed_voicing[1], "impliedNotes": transposed_voicing[2]}
+                    matching_voicings.append(absoluteKeysOfVoicingMidi(input_voicing))
+                    matching_voicings_relative.append(relativeKeysOfVoicingMidi(transpose_voicing_midi(input_voicing, 0, True), keySign, required_notes))
+
 
             result[index][index1]["voicings"] = matching_voicings
             result[index][index1]["relativeVoicings"] = matching_voicings_relative
@@ -811,11 +610,22 @@ def main():
     for ks in score.flatten().getElementsByClass('KeySignature'):
         keySign = ks.sharps
 
+    
+    timeSign = {"numerator": score.getTimeSignatures()[0].numerator, "denominator": score.getTimeSignatures()[0].denominator}
+
     voicings = getAllVoicings()
+    for voicing in voicings:
+        voicing["leftHand"] = [midi_map[note_v.replace("b", "-")] for note_v in voicing["leftHand"]]
+        voicing["impliedNotes"] = [midi_map[note_v.replace("b", "-")] for note_v in voicing["impliedNotes"]]
+        if voicing["rightHand"][0] == "ANY":
+            continue
+        voicing["rightHand"] = [midi_map[note_v.replace("b", "-")] for note_v in voicing["rightHand"]]
+        
+
     result = analyze_lead_sheet(score, keySign)
     result = rePossibleVoicings(result, keySign, voicings)
 
-    print(json.dumps({"result": result, "keySign": keySign}))
+    print(json.dumps({"result": result, "keySign": keySign, "timeSign": timeSign}))
 
 if __name__ == "__main__":
     main()

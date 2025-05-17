@@ -121,13 +121,18 @@ class DB {
         try {
             await client.query('BEGIN');
 
-            const {fileName, storedName, noteInfo, keySign} = scoreJson;
+            const {fileName, storedName, noteInfo, keySign, timeSign} = scoreJson;
 
             let score_id = null;
             if (scoreId === -1) {
+                const {rows: [{time_signature_id}]} = await client.query(
+                    'INSERT INTO time_signature (numerator, denominator) VALUES ($1, $2) RETURNING time_signature_id',
+                    [timeSign.numerator, timeSign.denominator]
+                );
+
                 const {rows: [{score_id}]} = await client.query(
-                    'INSERT INTO score (file_name, stored_name, key_sign) VALUES ($1, $2, $3) RETURNING score_id',
-                    [fileName, storedName, keySign]
+                    'INSERT INTO score (file_name, stored_name, key_sign, time_signature_id) VALUES ($1, $2, $3, $4) RETURNING score_id',
+                    [fileName, storedName, keySign, time_signature_id]
                 );
             } else {
                 score_id = scoreId
@@ -158,7 +163,7 @@ class DB {
                     const notesIds = await this.insertNote([{
                         note_key,
                         duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("numerator") ? 0.5 : elem_length,
-                        relativeToKey: noteObj.relative_to_key[0][0],
+                        relativeToKey: this.parseNoteKey(noteObj.relative_to_key[0]).note_key,
                         is_natural: noteObj.relative_to_key[1] === 1,
                         octave,
                         is_rest: elem_name === 'Rest',
@@ -193,18 +198,18 @@ class DB {
                     }
                     if (voicings && voicings.length > 0) {
                         for (const [indexVoicing, voicing] of voicings.entries()) {
-                            if (voicing.length != 3 || voicing[0].length == 0 || voicing[1].length == 0) {
+                            if (Object.keys(voicing).length != 3 || voicing["leftHand"].length == 0 || voicing["rightHand"].length == 0) {
                                 continue
                             }
 
-                            const vocingNotesLeft = await this.insertNote(voicing[0].map((vn, index) => {
+                            const vocingNotesLeft = await this.insertNote(voicing["leftHand"].map((vn, index) => {
                                 const {note_key, is_natural, octave} = this.parseNoteKey(vn);
                                 return {
                                     note_key, duration: 0, relativeToKey: this.parseNoteKey(relativeVoicings[indexVoicing][0][index][0]).note_key, is_natural: relativeVoicings[indexVoicing][0][index][1] == 1, octave, is_rest: false
                                 };
                             }));
 
-                            const vocingNotesRight = await this.insertNote(voicing[1].map((vn, index) => {
+                            const vocingNotesRight = await this.insertNote(voicing["rightHand"].map((vn, index) => {
                                 const {note_key, is_natural, octave} = this.parseNoteKey(vn);
                                 return {
                                     note_key, duration: 0, relativeToKey: this.parseNoteKey(relativeVoicings[indexVoicing][1][index][0]).note_key, is_natural: relativeVoicings[indexVoicing][1][index][1] == 1, octave, is_rest: false
@@ -212,8 +217,8 @@ class DB {
                             }));
 
                             let vocingNotesImplied = null;
-                            if (voicing[2].length > 0) {
-                                 vocingNotesImplied = await this.insertNote(voicing[2].map((vn, index) => {
+                            if (voicing["impliedNotes"].length > 0) {
+                                 vocingNotesImplied = await this.insertNote(voicing["impliedNotes"].map((vn, index) => {
                                     const {note_key, is_natural, octave} = this.parseNoteKey(vn);
                                     return {
                                         note_key, duration: 0, relativeToKey: null, is_natural: null, octave, is_rest: false
@@ -249,7 +254,7 @@ class DB {
                             
                             const resultVocingNotesRight = await client.query(vocingNotesRightIdQuery);
 
-                            if (voicing[2].length > 0) {
+                            if (voicing["impliedNotes"].length > 0) {
                                 const vocingNotesImpliedIdQuery = format(
                                     'INSERT INTO measure_elem_voicing_note (measure_elem_voicing_id, note_id, is_implied) VALUES %L',
                                     vocingNotesImplied.map(id => [
@@ -273,7 +278,6 @@ class DB {
                                     if ( Object.keys(voicingOcatave).length != 3 || voicingOcatave["leftHand"].length == 0 || voicingOcatave["rightHand"].length == 0) {
                                         continue
                                     }
-                                    console.log(JSON.stringify(voicingOcatave, null, 2))
 
                                     const vocingNotesLeft = await this.insertNote(voicingOcatave["leftHand"].map((vn, index) => {
                                         const {note_key, is_natural, octave} = this.parseNoteKey(vn);
@@ -349,17 +353,22 @@ class DB {
             console.error('Panic!', error.stack);
         }
     }
-
-
+    
     async readScore(scoreId) {
         try {
             // Score-Basisdaten abrufen
             const scoreQuery = `
-                SELECT score_id, file_name, stored_name, key_sign 
+                SELECT score_id, file_name, stored_name, key_sign, time_signature_id
                 FROM score 
                 WHERE score_id = $1`;
             const scoreResult = await this.client.query(scoreQuery, [scoreId]);
     
+            const timeSignQuery = `
+                SELECT numerator, denominator
+                FROM time_signature 
+                WHERE time_signature_id = $1`;
+            const timeSignResult = await this.client.query(timeSignQuery, [scoreResult.rows[0].time_signature_id]);
+
             if (scoreResult.rows.length === 0) {
                 throw new Error(`Score with ID ${scoreId} not found`);
             }
@@ -370,7 +379,8 @@ class DB {
                 fileName: score.file_name,
                 storedName: score.stored_name,
                 keySign: score.key_sign,
-                noteInfo: []
+                noteInfo: [],
+                timeSign: {"numerator": timeSignResult.rows[0].numerator, "denominator": timeSignResult.rows[0].denominator}
             };
     
             // Measures für den Score abrufen
@@ -606,7 +616,6 @@ class DB {
     }
 
     async insertVoicingNote(noteKey, octave, isLeftHand, isImplied, voicingId) {
-        console.log(noteKey, octave, isLeftHand, isImplied, voicingId)
         const noteRes = await this.client.query(
             `INSERT INTO note 
             (note_key, octave)
@@ -846,7 +855,7 @@ app.get('/updateScore/:scoreId', async (req, res) => {
         const parsedOutput = JSON.parse(stdout);
         const result = parsedOutput["result"]
 
-        const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"]};
+        const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
         await db.deleteScoreData(scoreId);
 
         db.createScore(oneFileJson, scoreId);
@@ -879,7 +888,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
         const parsedOutput = JSON.parse(stdout);
         const result = parsedOutput["result"]
 
-        const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"]};
+        const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
 
         db.createScore(oneFileJson);
         db.deleteScore(scoreId);
@@ -985,7 +994,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
         const parsedOutput = JSON.parse(stdout);
         const result = parsedOutput["result"]
-        const oneFileJson = { fileName: req.file.originalname, storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"]};
+        const oneFileJson = { fileName: req.file.originalname, storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
 
         db.createScore(oneFileJson);
     });
