@@ -10,8 +10,8 @@ function isGhostNote(note) {
     return note.attrs.type === "GhostNote";
 }
 
-function createBeamEights(notes, notesTriplets, indecesTubles, isWaltsSign = false) {
-    if (isWaltsSign) {
+function createBeamEights(notes, notesTriplets, indecesTubles, timeSignNumerator) {
+    if (timeSignNumerator === 3) {
         return createBeamEightsWaltsSign(notes, notesTriplets, indecesTubles);
     }
     const possibleBeams = [[-1, 2048, 2048, 2048], [2048, 2048, 2048, -1], [-1, 2048, 2048, -1],  [-1, -1, 2048, 2048], [2048, 2048, -1, -1], [2048, 2048, 2048, 2048]]
@@ -86,7 +86,7 @@ function createBeamEights(notes, notesTriplets, indecesTubles, isWaltsSign = fal
         a.every((element, index) => element === b[index]);
       
     for (let i = 0; i < possibleBeams.length; ++i) {
-        if (noLongerThanEights.length >= 3) {
+        if (noLongerThanEights.length >= 8) {
             // Erste Bedingung: Vergleiche die ersten 4 Elemente von noLongerThanEights, ohne Änderung
             if (compareArrays(noLongerThanEights.slice(0, 4), possibleBeams[i])) {
                 // Extrahiere den Bereich aus notes ohne Änderung des Original-Arrays
@@ -131,6 +131,117 @@ function createBeamEightsWaltsSign(notes, notesTriplets, indecesTubles) {
     }
     return beamGroups
 }
+
+function createBeamSixteenth(notes, notesTriplets, indecesTubles, timeSignNumerator) { 
+    const possibleBeams = [[-1, 1024, 1024, 1024], [1024, 1024, 1024, -1], [-1, 1024, 1024, -1],  [-1, -1, 1024, 1024], [1024, 1024, -1, -1], [1024, 1024, 1024, 1024]]
+    
+    let noLongerThanSixteenth = [];
+    let allNotesTicks = [];
+
+    let  = false;
+    for (let i = 0; i < notes.length; ++i) {
+        if (isGhostNote(notes[i])) {
+            continue;
+        }
+        let continueVar = false;
+        for (let j = 0; indecesTubles && j < indecesTubles.length; ++j) { 
+            
+            if (indecesTubles[j].length > 0 && indecesTubles[j][1] == i) {
+                for (let k = 0; k < 4; ++k) { 
+                    noLongerThanSixteenth.push(-1);
+                }
+
+                allNotesTicks.push(1024 * 4)
+            
+                i += 3;
+                continueVar = true;
+                continue;
+            }
+        }
+        if (continueVar) {
+            continueVar = false;
+            continue
+        }
+        if (notes[i].isRest() ||  notes[i].getTicks().value() != 1024) {
+            allNotesTicks.push(notes[i].getTicks().value())
+            const addedSixteenthRests = notes[i].getTicks().value() / 1024
+            for (let j = 0; j < addedSixteenthRests; ++j) {
+                noLongerThanSixteenth.push(-1);
+            }
+            
+        } else {
+            noLongerThanSixteenth.push(notes[i].getTicks().value());
+            allNotesTicks.push(notes[i].getTicks().value())
+        }
+    }
+
+    
+    
+
+    function getSpliceValues(possibleBeam, start) {
+        let notesTickValues = []
+        let startIndex = null;
+        let length = 0;
+        let counter = 0;
+
+        let startCounter = 0;
+        
+        for (let i = 0; i < allNotesTicks.length; ++i) {
+            if (startCounter == start) {
+                start = i;
+                break
+            }
+            startCounter += allNotesTicks[i] / 1024;
+        }
+
+        for (let i = start; i < allNotesTicks.length; ++i) {
+            
+            if (counter >= 4) {
+                break
+            }
+
+            if (allNotesTicks[i] != 1024) {
+                counter += allNotesTicks[i] / 1024;
+                continue
+            }
+            if (possibleBeam[counter] != -1 && startIndex == null) {
+                startIndex = i;
+            } 
+            if (possibleBeam[counter] != -1) length += 1;
+            counter += 1
+
+        }
+        return [startIndex, length]
+    }
+
+    const compareArrays = (a, b) =>
+        a.length === b.length &&
+        a.every((element, index) => element === b[index]);
+    
+    //change lonely elements
+    let beamGroups = []
+    for (let i = 0; i < possibleBeams.length; ++i) {
+        if (noLongerThanSixteenth.length >= 16) {
+            for (let j = 0; j < timeSignNumerator; ++j) {
+                let slicesNoLongerThanSixteenth = JSON.parse(JSON.stringify(noLongerThanSixteenth.slice(j * 4, j * 4 + 4)));
+                if (slicesNoLongerThanSixteenth[1] === -1 && slicesNoLongerThanSixteenth[0] == 1024) {
+                    slicesNoLongerThanSixteenth[0] = -1
+                } else if (slicesNoLongerThanSixteenth[2] == -1 && slicesNoLongerThanSixteenth[3] == 1024) {
+                    slicesNoLongerThanSixteenth[3] = -1
+                }
+                if (compareArrays(slicesNoLongerThanSixteenth, possibleBeams[i])) {
+                    // Extrahiere den Bereich aus notes ohne Änderung des Original-Arrays
+                    const spliceValues = getSpliceValues(possibleBeams[i], j * 4);
+                    beamGroups.push(notes.slice(spliceValues[0], spliceValues[1] + spliceValues[0]));
+                }
+            }
+        }
+        
+    }
+
+    return beamGroups
+}
+
 
 // Create an SVG renderer and attach it to the DIV element named "output".
 const div = document.getElementById("output");
@@ -218,6 +329,7 @@ svg.addEventListener('chordClick', (e) => {
                 }
                 e.detail.allData.addedVoicingsIndeces.push([groupIndex, measureInGroupIndex, noteIndex, voicngIndex]);
                 document.getElementById("impliedNotes").textContent = JSON.stringify(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex][2].map(note => note.note_key));
+                document.getElementById("chordDegrees").textContent = calcChordDegrees(e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex][voicngIndex], e.detail.originalData[measureIndex][noteIndex].chord_details)
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
 
@@ -606,8 +718,7 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes) {
     return tupletGroups;
 }
 // Angepasste renderOneMeasure-Funktion
-const measureWidth = 400;
-
+const measureWidth = 350;
 
 function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, staveWidth = measureWidth) {
     
@@ -624,27 +735,23 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     if (isFirstMeasure) {
         trebleStave.addClef("treble").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
     }
-    trebleStave.setContext(context).draw();
 
     const bassStave = new Stave(10 + xOffset, 140 + yOffset, staveWidth);
     if (isFirstMeasure) {
         bassStave.addClef("bass").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
     }
-    bassStave.setContext(context).draw();
 
+    let connector = null;
     if (isFirstMeasure) {
         const connector = new StaveConnector(trebleStave, bassStave);
         connector.setType(StaveConnector.type.BRACE);
-        connector.setContext(context).draw();
     }
 
     const lineLeft = new StaveConnector(trebleStave, bassStave);
     lineLeft.setType(StaveConnector.type.SINGLE_LEFT);
-    lineLeft.setContext(context).draw();
 
     const lineRight = new StaveConnector(trebleStave, bassStave);
     lineRight.setType(StaveConnector.type.SINGLE_RIGHT);
-    lineRight.setContext(context).draw();
 
     const annotatedTrebleNotes = trebleStaveNotes.map((note, noteIndex) => {
         if (chordNames[noteIndex] && chordNames[noteIndex] !== "Unknown chord") {
@@ -707,12 +814,16 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     
     const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
 
-    const trebleBeams = [...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator == 3), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const beamsSixtheenthTreble = createBeamSixteenth(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator)
+    const trebleBeams = [...beamsSixtheenthTreble, ...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
     const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes)
-    const bassBeams = [...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces, timeSign.numerator == 3), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
+
+    const beamsSixtheenthBass = createBeamSixteenth(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces, timeSign.numerator)
+
+    const bassBeams = [...beamsSixtheenthBass, ...createBeamEights(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces, timeSign.numerator), ...bassNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     const trebleVoice = new Voice({ num_beats: timeSign.numerator, beat_value: timeSign.denominator });
@@ -729,11 +840,23 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     formatter.joinVoices([trebleVoice]).joinVoices([bassVoice]);
     formatter.formatToStave([trebleVoice, bassVoice], trebleStave, { align_rests: false, stave: trebleStave});
 
-    console.log(formatter.preCalculateMinTotalWidth())
+
     
-    if (formatter.preCalculateMinTotalWidth() > staveWidth) {
-        return renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, staveWidth + 10)
-    }
+    staveWidth = formatter.preCalculateMinTotalWidth([trebleVoice]) + 10
+    if (isFirstMeasure) staveWidth += 40
+    if (staveWidth <= measureWidth) staveWidth = measureWidth
+
+    trebleStave.setWidth(staveWidth)
+    bassStave.setWidth(staveWidth)
+
+    trebleStave.setContext(context).draw();
+    bassStave.setContext(context).draw();
+    if (connector)
+        connector.setContext(context).draw();
+
+    lineLeft.setContext(context).draw();
+    lineRight.setContext(context).draw();
+
 
     trebleVoice.draw(context, trebleStave);
     bassVoice.draw(context, bassStave);
@@ -808,6 +931,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
             }
         }
     });
+    return staveWidth;
 }
 
 // Angepasste renderThreeMeasure-Funktion
@@ -887,7 +1011,8 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
     }
     const leftOffset = 5;
 
+    let staveWidth = 0;
     for (let i = 0; i < measureCount; ++i) {
-        renderOneMeasure(musicElementsBase[i], musicElements[i], measureWidth * i + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign);
+        staveWidth += renderOneMeasure(musicElementsBase[i], musicElements[i], staveWidth + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign);
     }
 }

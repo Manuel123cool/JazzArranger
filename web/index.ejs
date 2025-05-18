@@ -23,6 +23,7 @@
             <option value="5">Change Left Hand Voicing Octave</option>
         </select>
         <div id="impliedNotes"></div>
+        <div id="chordDegrees"></div>
     </div>
     <div id="output"></div>
     <div id="output2"></div>
@@ -38,13 +39,14 @@
         // Use URLSearchParams to access the query parameters
         const params = new URLSearchParams(url.search);
         const measureCount = Number(params.get('measureCount'));
-        console.log(measureCount)
     </script>
     <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow.js"></script>
 
+   
     <script src="nextIndex.js"></script>
 
     <script src="chordIdentifier.js" type"text/javscript"></script>
+    <script src="calcChordDegrees.js"></script>
 
     <script src="createStaffNotes.js" type"text/javscript"></script>
 

@@ -119,21 +119,25 @@ class DB {
     async createScore(scoreJson, scoreId = -1) {
         const client = this.client;
         try {
+            console.log(JSON.stringify(scoreJson))
             await client.query('BEGIN');
 
             const {fileName, storedName, noteInfo, keySign, timeSign} = scoreJson;
 
             let score_id = null;
+            console.log("scoreId", scoreId)
             if (scoreId === -1) {
+                
                 const {rows: [{time_signature_id}]} = await client.query(
                     'INSERT INTO time_signature (numerator, denominator) VALUES ($1, $2) RETURNING time_signature_id',
                     [timeSign.numerator, timeSign.denominator]
                 );
 
-                const {rows: [{score_id}]} = await client.query(
+                const insertScoreResult = await client.query(
                     'INSERT INTO score (file_name, stored_name, key_sign, time_signature_id) VALUES ($1, $2, $3, $4) RETURNING score_id',
                     [fileName, storedName, keySign, time_signature_id]
                 );
+                score_id = insertScoreResult.rows[0].score_id
             } else {
                 score_id = scoreId
             }
