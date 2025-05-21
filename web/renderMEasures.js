@@ -318,8 +318,13 @@ svg.addEventListener('chordClick', (e) => {
 
              if (lastAddedVoicingIndex != null) {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
+                
+                if (e.detail.mode === "improAccompanying" && Number(document.getElementById("mode-select1").value) == 7) {
+                    e.detail.originalData[measureIndex][noteIndex].voicings = changeOctave(e.detail.originalData[measureIndex][noteIndex].voicings, voicngIndex, measureIndex, noteIndex)
+                } else {
+                    voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex, e.detail.mode)
 
-                voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex)
+                }
             }
 
              // Voicings hinzufügen (falls vorhanden)
@@ -355,7 +360,7 @@ svg.addEventListener('chordClick', (e) => {
     }
     isClicked = true;
     for (let i = 0; i < e.detail.allData.staveNotes.length ; ++i) {
-        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber, e.detail.timeSign); 
+        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber, e.detail.timeSign, e.detail.mode); 
     }
     isClicked = false;
 
@@ -720,8 +725,9 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes) {
 // Angepasste renderOneMeasure-Funktion
 const measureWidth = 350;
 
-function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, staveWidth = measureWidth) {
-    
+function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, mode) {
+    let staveWidth = measureWidth;
+
     const keySignatureMap = {
         '-7': 'Cb', '-6': 'Gb', '-5': 'Db', '-4': 'Ab', '-3': 'Eb', '-2': 'Bb', '-1': 'F',
         '0': 'C', '1': 'G', '2': 'D', '3': 'A', '4': 'E', '5': 'B', '6': 'F#', '7': 'C#'
@@ -803,9 +809,18 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         return note;
     });
 
-    let combineResult  = combineRests(processedBassNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
-    const bassTupletIndeces = combineResult.newTupletIndeces;
-    processedBassNotes =  combineResult.newNotes;
+    let combineResultBass  = combineRests(processedBassNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
+    const bassTupletIndeces = combineResultBass.newTupletIndeces;
+    processedBassNotes =  combineResultBass.newNotes;
+
+    let trebleTupletIndeces = allData.tupletsIndeces[measureIndex + lineIndex * measureCount];
+
+    if (mode == "melodyAccompanying") {
+        let combineResultTreble  = combineRests(processedTrebleNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
+        trebleTupletIndeces = combineResultTreble.newTupletIndeces;
+        processedTrebleNotes =  combineResultTreble.newNotes;
+    }
+
 
     processedTrebleNotes = addDotted(processedTrebleNotes)
     processedBassNotes = addDotted(processedBassNotes)
@@ -814,8 +829,8 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     
     const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
 
-    const beamsSixtheenthTreble = createBeamSixteenth(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator)
-    const trebleBeams = [...beamsSixtheenthTreble, ...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, allData.tupletsIndeces[measureIndex + lineIndex * measureCount], timeSign.numerator), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
+    const beamsSixtheenthTreble = createBeamSixteenth(processedTrebleNotes, trebleNoteTupletGroups, trebleTupletIndeces, timeSign.numerator)
+    const trebleBeams = [...beamsSixtheenthTreble, ...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, trebleTupletIndeces, timeSign.numerator), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
@@ -914,7 +929,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                 rect.addEventListener('click', () => {
                     console.log(`Akkord ${chordText} wurde geklickt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -924,7 +939,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                     e.preventDefault();
                     console.log(`Akkord ${chordText} wurde getippt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -935,7 +950,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 }
 
 // Angepasste renderThreeMeasure-Funktion
-function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign, timeSign) {
+function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign, timeSign, mode) {
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < measureCount; ++i) {
         musicElements.push([
@@ -1013,6 +1028,6 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
 
     let staveWidth = 0;
     for (let i = 0; i < measureCount; ++i) {
-        staveWidth += renderOneMeasure(musicElementsBase[i], musicElements[i], staveWidth + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign);
+        staveWidth += renderOneMeasure(musicElementsBase[i], musicElements[i], staveWidth + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign, mode);
     }
 }

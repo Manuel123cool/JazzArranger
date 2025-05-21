@@ -29,7 +29,7 @@ class OneTuplet {
 }
 
 class OneNote {
-    constructor(note_key, duration, is_natural, octave, is_rest, relative_to_key = null, oneTuplet = null) {
+    constructor(note_key, duration, is_natural, octave, is_rest, relative_to_key = null, oneTuplet = null, octave_change = null) {
         this.note_key = note_key;
         this.duration = duration
         this.is_natural = is_natural
@@ -37,6 +37,7 @@ class OneNote {
         this.is_rest = is_rest
         this.relative_to_key = relative_to_key
         this.oneTuplet = oneTuplet
+        this.octave_change = octave_change
     }
 }
 
@@ -76,14 +77,15 @@ class DB {
         const notes = Array.isArray(noteObj) ? noteObj : [noteObj];
     
         const queryText = format(
-            'INSERT INTO note (note_key, duration, relative_to_key, is_natural, octave, is_rest) VALUES %L RETURNING note_id',
+            'INSERT INTO note (note_key, duration, relative_to_key, is_natural, octave, is_rest, octave_change) VALUES %L RETURNING note_id',
             notes.map(n => [
                 n.note_key,
                 n.duration,
                 n.relativeToKey,
                 n.is_natural,
                 n.octave,
-                n.is_rest
+                n.is_rest,
+                n.note_octave
             ])
         );
         
@@ -122,7 +124,7 @@ class DB {
             console.log(JSON.stringify(scoreJson))
             await client.query('BEGIN');
 
-            const {fileName, storedName, noteInfo, keySign, timeSign} = scoreJson;
+            const {fileName, storedName, noteInfo, keySign, timeSign, mode} = scoreJson;
 
             let score_id = null;
             console.log("scoreId", scoreId)
@@ -134,8 +136,8 @@ class DB {
                 );
 
                 const insertScoreResult = await client.query(
-                    'INSERT INTO score (file_name, stored_name, key_sign, time_signature_id) VALUES ($1, $2, $3, $4) RETURNING score_id',
-                    [fileName, storedName, keySign, time_signature_id]
+                    'INSERT INTO score (file_name, stored_name, key_sign, time_signature_id, mode) VALUES ($1, $2, $3, $4, $5) RETURNING score_id',
+                    [fileName, storedName, keySign, time_signature_id, mode]
                 );
                 score_id = insertScoreResult.rows[0].score_id
             } else {
@@ -171,7 +173,8 @@ class DB {
                         is_natural: noteObj.relative_to_key[1] === 1,
                         octave,
                         is_rest: elem_name === 'Rest',
-                        tuplet: typeof elem_length === 'object' && elem_length.hasOwnProperty("numerator") ? elem_length : false
+                        tuplet: typeof elem_length === 'object' && elem_length.hasOwnProperty("numerator") ? elem_length : false,
+                        octave_change: 0
                     }]);
 
                     const {rows: [{measure_elem_id}]} = await client.query(
@@ -362,7 +365,7 @@ class DB {
         try {
             // Score-Basisdaten abrufen
             const scoreQuery = `
-                SELECT score_id, file_name, stored_name, key_sign, time_signature_id
+                SELECT score_id, file_name, stored_name, key_sign, time_signature_id, mode
                 FROM score 
                 WHERE score_id = $1`;
             const scoreResult = await this.client.query(scoreQuery, [scoreId]);
@@ -384,7 +387,8 @@ class DB {
                 storedName: score.stored_name,
                 keySign: score.key_sign,
                 noteInfo: [],
-                timeSign: {"numerator": timeSignResult.rows[0].numerator, "denominator": timeSignResult.rows[0].denominator}
+                timeSign: {"numerator": timeSignResult.rows[0].numerator, "denominator": timeSignResult.rows[0].denominator},
+                mode: score.mode
             };
     
             // Measures für den Score abrufen
@@ -410,7 +414,7 @@ class DB {
                 for (const elem of measureElementsResult.rows) {
                     // Haupt-Note abrufen
                     const noteQuery = `
-                        SELECT n.note_id, n.note_key, n.duration, n.relative_to_key, n.is_natural, n.octave AS octave, n.is_rest, t.numerator, t.denominator
+                        SELECT n.note_id, n.note_key, n.duration, n.relative_to_key, n.is_natural, n.octave AS octave, n.is_rest, t.numerator, t.denominator, n.octave_change
                         FROM measure_elem_note men
                         JOIN note n ON men.note_id = n.note_id
                         LEFT JOIN tuplet t ON n.note_id = t.note_id
@@ -426,6 +430,7 @@ class DB {
                         voicingIndexLeftHand: elem.voicing_index_left_hand || elem.voicing_index_left_hand == 0 ? elem.voicing_index_left_hand : -1,
                         voicings: [], 
                         chord_details: [],
+                        octave_change: elem.octave_change
                     };
     
                     // Chord-Details abrufen
@@ -454,7 +459,7 @@ class DB {
 
                         for (const voicing of voicingResult.rows) {
                             const voicingNotesQuery = `
-                                SELECT n.note_key, n.is_natural, n.octave, n.relative_to_key, mevn.is_left_hand, mevn.is_implied
+                                SELECT n.note_key, n.is_natural, n.octave, n.relative_to_key, n.octave_change, mevn.is_left_hand, mevn.is_implied
                                 FROM measure_elem_voicing_note mevn
                                 JOIN note n ON mevn.note_id = n.note_id
                                 WHERE mevn.measure_elem_voicing_id = $1
@@ -466,15 +471,15 @@ class DB {
                             //constructor(note_key, duration, is_natural, octave, is_rest, relative_to_key = null, oneTuplet = null) {
                             const leftHandNotes = voicingNotesResult.rows
                                 .filter(vn => vn.is_left_hand && !vn.is_implied)
-                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
+                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key, null, vn.octave_change));
 
                             const rightHandNotes = voicingNotesResult.rows
                                 .filter(vn => !vn.is_left_hand && !vn.is_implied)
-                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
+                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key, null, vn.octave_change));
                             
                             const impliedNotes = voicingNotesResult.rows
                                 .filter(vn => vn.is_implied)
-                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key));
+                                .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key, null, vn.octave_change));
                             
                             if (leftHandNotes.length > 0 && rightHandNotes.length > 0) {
                                 if (voicing.from_any_top_note) {
@@ -555,6 +560,55 @@ class DB {
             this.client.query(updateQuery, [voicingIndex, measure_elem_id]);
         }
         
+    }
+    async updateChangeOctave(scoreId, measureIndex, voicingIndex, octaveChange, noteId) {
+        console.log(scoreId, measureIndex, voicingIndex, octaveChange, noteId)
+        const measureIdQuery = `
+            SELECT measure_id 
+            FROM measure 
+            WHERE score_id = $1 
+            ORDER BY measure_id
+        `;
+        
+        const measureIdsResult = await this.client.query(measureIdQuery, [scoreId]);
+        let measure_id = measureIdsResult.rows[measureIndex].measure_id;
+
+        // Hole die measure_elem_id für den angegebenen measure_id und elemId (index)
+        const elemIdQuery = `
+            SELECT measure_elem_id 
+            FROM measure_elem 
+            WHERE measure_id = $1 
+            ORDER BY measure_elem_id
+        `;
+        
+        const elemIdResult = await this.client.query(elemIdQuery, [measure_id]);
+        let measure_elem_id = elemIdResult.rows[noteId].measure_elem_id;
+
+        // Hole die measure_elem_voicing_id für das angegebene voicingIndex
+        const voicingIdQuery = `
+            SELECT measure_elem_voicing_id
+            FROM measure_elem_voicing
+            WHERE measure_elem_id = $1
+            ORDER BY measure_elem_voicing_id
+            LIMIT 1 OFFSET $2 -- voicingIndex as zero-based index
+        `;
+
+        const voicingIdResult = await this.client.query(voicingIdQuery, [measure_elem_id, voicingIndex]);
+        let measure_elem_voicing_id = voicingIdResult.rows[0].measure_elem_voicing_id;
+
+        // Update die note indem wir die note_id und measure_elem_voicing_id in der Tabelle nachschlagen
+         const updateQuery = `
+            UPDATE note
+            SET octave_change = $1
+            WHERE note.note_id IN (
+                SELECT mevn.note_id
+                FROM measure_elem_voicing mev
+                JOIN measure_elem_voicing_note mevn ON mevn.measure_elem_voicing_id = $2
+                WHERE mev.measure_elem_id = $3
+            );
+        `; 
+        
+        await this.client.query(updateQuery, [octaveChange, measure_elem_voicing_id, measure_elem_id]);
     }
 
     async deleteScoreData(scoreId) {
@@ -807,6 +861,14 @@ class DB {
             [voicingId]
         );
     }
+
+    async getScoreMode(score_id) {
+        const modeSelectResult = await this.client.query(
+            `SELECT mode FROM score WHERE score_id = $1`,
+            [score_id]
+        );
+        return modeSelectResult.rows[0].mode;
+    }
 }
 
 const db = new DB(client);
@@ -844,7 +906,7 @@ app.get('/updateScore/:scoreId', async (req, res) => {
     const name = await db.getStoredName(scoreId);
 
     let command = 'readLeadSheetServer.py';
-    command = `python3 ${command} ./uploads/${name.stored_name}`
+    command = `python3 ${command} ./uploads/${name.stored_name} ${await db.getScoreMode(scoreId)}`
 
     exec(command, async (error, stdout, stderr) => {
         if (error) {
@@ -877,7 +939,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
     const { stdout: stdout1 } = await util.promisify(exec)(`python3 ${pythonFile} ./uploads/${name.stored_name} ${transposeValue}`);
 
     let command = 'readLeadSheetServer.py';
-    command = `python3 ${command} ./uploads/${name.stored_name}`
+    command = `python3 ${command} ./uploads/${name.stored_name} ${await db.getScoreMode(scoreId)}`
 
     exec(command, async (error, stdout, stderr) => {
         if (error) {
@@ -943,6 +1005,15 @@ app.post('/saveStatus/:scoreId', async (req, res) => {
     res.json({ message: 'JSON erfolgreich gespeichert!' });
 });
 
+// Route zum Speichern des JSON-Arra
+app.use(express.json());
+app.post('/changeOctave/:scoreId', async (req, res) => {
+    db.updateChangeOctave(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.octaveChange, req.body.elemId);
+
+    res.json({ message: 'JSON erfolgreich gespeichert!' });
+});
+
+
 app.use(express.json());
 app.post('/saveStatusLeftHand/:scoreId', async (req, res) => {
     db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId, true);
@@ -983,8 +1054,13 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded or invalid file type' });
     }
+
+    let { mode, fileName } = req.body;
+    
+    fileName = fileName !== "" && fileName ? fileName : req.file.originalname;
+
     const pythonFile = 'readLeadSheetServer.py';
-    const command = `python3 ${pythonFile} uploads/${req.file.filename}`;
+    const command = `python3 ${pythonFile} uploads/${req.file.filename} ${mode}`;
 
     exec(command, async (error, stdout, stderr) => {
         if (error) {
@@ -998,11 +1074,11 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
         const parsedOutput = JSON.parse(stdout);
         const result = parsedOutput["result"]
-        const oneFileJson = { fileName: req.file.originalname, storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
+        const oneFileJson = { fileName: fileName , storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"], mode: mode};
 
         db.createScore(oneFileJson);
     });
-    res.json({ message: `File ${req.file.originalname} uploaded successfully!` });
+    res.json({ message: `File ${fileName} uploaded successfully!` });
 });
 
 app.get('/getPDF/:scoreId', async (req, res) => {
@@ -1110,13 +1186,10 @@ app.put('/voicing/:id', async (req, res) => {
     for (const note of req.body.voicing.leftHand) {
       await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), true, false, voicingId);
     }
-
     
     for (const note of req.body.voicing.rightHand) {
         await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, false, voicingId);
     }
-    
-    
 
     for (const note of req.body.voicing.impliedNotes) {
       await db.insertVoicingNote(note.replace(note.at(-1), ""), note.at(-1), false, true, voicingId);

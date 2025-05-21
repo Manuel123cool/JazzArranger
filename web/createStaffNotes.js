@@ -6,17 +6,17 @@ if (typeof VexFlow === "undefined") {
   
   const VF = VexFlow;
 function convertToVexFlowKeyVoicing(oneNote) {  
-  return convertToVexFlowKey(oneNote.relative_to_key, oneNote.note_key, oneNote.octave, oneNote.is_rest)
+  return convertToVexFlowKey(oneNote.relative_to_key, oneNote.note_key, oneNote.octave, oneNote.is_rest, oneNote.octave_change)
 }
 
-  function convertToVexFlowKey(relative_to_key, note_key, octave, isRest) {
+  function convertToVexFlowKey(relative_to_key, note_key, octave, isRest, octave_change) {
     const key = relative_to_key ? relative_to_key : note_key
-    
+    octave_change = octave_change ? octave_change : 0
     if (isRest) {
       return "b/4"
     }
 
-    return `${key.replace("-", "b")}/${octave}`;
+    return `${key.replace("-", "b")}/${octave + octave_change}`;
   }
   
   function music21ToVexflowDuration(music21Duration) {
@@ -63,7 +63,7 @@ function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) 
       let staffNotesMeasure = []
       measure.forEach( (element, index) => {
           let elementNote = element.oneNote
-          let keys = [convertToVexFlowKey(elementNote.relative_to_key, elementNote.note_key, elementNote.octave, elementNote.is_rest)]
+          let keys = [convertToVexFlowKey(elementNote.relative_to_key, elementNote.note_key, elementNote.octave, elementNote.is_rest, elementNote.octave_change)]
           let voicingIndex = null;
 
           if (voicings[indexMeasure][index].length > 0) {
@@ -80,7 +80,7 @@ function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) 
             keys = []
             for (let i = 0; i < voicings[indexMeasure][index][voicingIndex][1].length; ++i) {
               const voicingNote = voicings[indexMeasure][index][voicingIndex][1][i];
-              keys.push(convertToVexFlowKey(voicingNote.relative_to_key, voicingNote.note_key, voicingNote.octave, voicingNote.is_rest))
+              keys.push(convertToVexFlowKey(voicingNote.relative_to_key, voicingNote.note_key, voicingNote.octave, voicingNote.is_rest, voicingNote.octave_change))
             }
           }
           let duration = music21ToVexflowDuration(element.oneNote.duration)

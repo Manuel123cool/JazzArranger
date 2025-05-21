@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS note (
     relative_to_key varchar(10),
     is_natural BOOLEAN,
     octave SMALLINT,
-    is_rest BOOLEAN
+    is_rest BOOLEAN,
+    octave_change SMALLINT
 );
 
 CREATE TABLE time_signature (
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS score (
   stored_name varchar(255),
   key_sign int,
   time_signature_id INTEGER,
+  mode varchar(60),
   CONSTRAINT fk_score_time_signature
       FOREIGN KEY (time_signature_id)
       REFERENCES time_signature(time_signature_id) ON DELETE CASCADE

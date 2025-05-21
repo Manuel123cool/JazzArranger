@@ -11,7 +11,7 @@
             "program": "${file}",
             "python": "/Users/manuelkuempel/Desktop/JazzArranger/.venv/bin/python",
             "console": "integratedTerminal",
-            "args": ["./uploads/1747420429370.musicxml"],
+            "args": ["./uploads/1747675770475.musicxml", "improAccompanying"],
             "cwd": "${workspaceFolder}"
         },
         {

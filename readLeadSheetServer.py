@@ -111,20 +111,6 @@ def checkIfAvailableTensionsMidi(required_notes, voicing_notes):
                 return (True, key)
     return (False, "")
 
- 
-def get_all_chromatic_notes():
-    # Erstelle ein leeres Array für die Noten
-    chromatic_notes = []
-    
-    # Die chromatischen Noten beginnen bei C4 (MIDI 60) und enden bei B4 (MIDI 71)
-    for midi_number in range(60, 72):  # C4 (60) bis B4 (71)
-        # Erstelle eine Pitch-Instanz aus der MIDI-Nummer
-        current_pitch = pitch.Pitch(midi=midi_number)
-        # Füge den Notennamen (z. B. 'C4', 'C#4', 'D4') zum Array hinzu
-        chromatic_notes.append(current_pitch.nameWithOctave)
-    
-    return chromatic_notes
-
 def transpose_voicing_midi(voicing, intervalPar, withImpliedNotes = False):
     transposed_voicing = []
     transposed_voicing.append([noteMidi + intervalPar for noteMidi in voicing["leftHand"]])
@@ -378,10 +364,10 @@ def getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign):
             move_note = newInversion.pop(0)
             #append() method to add the elements
             newInversion.append(move_note)
-            while newInversion[-1]< newInversion[-2]:
+            while newInversion[-1] < newInversion[-2]:
                 newInversion[-1] += 12
             
-            while move_note >top_note:
+            if move_note > top_note:
                 for newInversionNote in newInversion:
                     newInversionNote -= 12
 
@@ -464,7 +450,7 @@ def getAllVoicings():
         print(f"Ein Fehler ist aufgetreten: {e}")
 
 
-def analyze_lead_sheet(score, keySign):
+def analyze_lead_sheet(score, keySign, mode):
     returnArray = []
     # Partitur laden
 
@@ -525,14 +511,15 @@ def analyze_lead_sheet(score, keySign):
                 relative_to_key = ("Rest", -1)
 
             
+            
             if matching_chord:
                 chord_pitches = [p.nameWithOctave for p in matching_chord.pitches]
 
-
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": chord_pitches, "elem_length": elem_length, "relative_to_key":  relative_to_key})
-            else:
-
+            elif mode == "standard":
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": [], "elem_length": elem_length, "relative_to_key": relative_to_key})
+            elif mode == "melodyAccompanying" or mode == "improAccompanying":
+                returnArray[-1].append({"elem_name": "Rest", "chord_details": [], "elem_length": elem_length, "relative_to_key": ("Rest", -1)})
 
     return returnArray
 import json
@@ -598,9 +585,111 @@ def rePossibleVoicings(result, keySign, voicings):
 
     return result
 
+def allPossibleTopNotes(chord_notes, top_note):
+    def adjustOctave(note):
+        topNoteOctave = get_octave(top_note)
+        # Berechne die MIDI-Note in der gleichen Oktave wie top_note
+        new_midi_note = (topNoteOctave + 1) * 12 + (note % 12)
+        
+        # Berechne Varianten eine Oktave darüber und darunter
+        octaveAbove = new_midi_note + 12
+        octaveBelow = new_midi_note - 12
+        
+        # Berechne die absoluten Abstände zu top_note
+        dist_current = abs(new_midi_note - top_note)
+        dist_above = abs(octaveAbove - top_note)
+        dist_below = abs(octaveBelow - top_note)
+        
+        # Wähle die Option mit dem kleinsten Abstand zu top_note
+        distances = {
+            dist_current: new_midi_note,
+            dist_above: octaveAbove,
+            dist_below: octaveBelow
+        }
+        min_dist = min(dist_current, dist_above, dist_below)
+        return distances[min_dist]
+
+    # Annahme: Beispieldefinitionen für possibleChords und availableTensions
+    possibleChords = {
+        'major': [0, 4, 7],
+        'minor': [0, 3, 7],
+        'diminished': [0, 3, 6]
+    }
+    availableTensions = {
+        'major': [2, 9, 14],  # z. B. 9, 11, 13 als MIDI-Offset
+        'minor': [2, 9, 14],
+        'diminished': []
+    }
+
+    # Berechne Intervalle relativ zur ersten Note (oder kleinsten Note)
+    base_note = min(chord_notes)  # Sicherstellen, dass die Basisnote die kleinste ist
+    intervals_chord_notes = []
+    for n in chord_notes:
+        interval = n - base_note
+        while interval >= 12:  # Normalisiere auf eine Oktave
+            interval -= 12
+        intervals_chord_notes.append(interval)
+    
+    intervals_chord_notes = set(sorted(intervals_chord_notes))  # Sortiere für Vergleich
+
+    for key, value in possibleChords.items():
+        possibleChordsSet = set(value)
+        if possibleChordsSet == intervals_chord_notes:
+            # Erlaubte Tensionen hinzufügen
+            tensions = availableTensions[key]
+            tension_midi_values = [adjustOctave(base_note + tension) for tension in tensions]
+            # Passe die Akkordnoten an top_note an
+            chord_notes_adjusted = [adjustOctave(n) for n in chord_notes]
+            return tension_midi_values + chord_notes_adjusted
+    
+    # Falls kein Akkord gefunden wird, nur die angepassten Noten zurückgeben
+    return [adjustOctave(n) for n in chord_notes]
+
+def reImproAccompanyingVoicings(result, keySign, voicings):
+    for index, oneMeasure in enumerate(result):
+        for index1, oneNoteInfo in enumerate(oneMeasure):
+            chord_notes = [midi_map[note_detail.replace("b", "-")] for note_detail in oneNoteInfo['chord_details']]
+            
+            if len(chord_notes) == 0:
+                continue
+            
+            top_note = midi_map[oneNoteInfo['elem_name']]
+            # Akkordnoten und Wurzelnote berechnen
+            required_notes = chord_notes
+            root_note = chord_notes[0]
+            
+            # Passende Voicings finden
+            matching_voicings = []
+            matching_voicings_relative = []
+            matching_voicings_implied = []
+
+            allTopNotes = allPossibleTopNotes(required_notes, top_note)
+
+            for top_note in allTopNotes:
+                for v_index, voicing in enumerate(voicings):
+                    if voicing["rightHand"][0] == "ANY": continue
+                                        
+                    ref_note = voicing["rightHand"][-1]
+                    interval = top_note - ref_note
+                    # Voicing transponieren
+                    transposed_voicing = transpose_voicing_midi(voicing, interval, True)
+
+                    # Kriterien prüfen
+                    if check_voicing_midi(transposed_voicing, top_note, required_notes):
+                        input_voicing = {"leftHand": transposed_voicing[0], "rightHand": transposed_voicing[1], "impliedNotes": transposed_voicing[2]}
+                        matching_voicings.append(absoluteKeysOfVoicingMidi(input_voicing))
+                        matching_voicings_relative.append(relativeKeysOfVoicingMidi(transpose_voicing_midi(input_voicing, 0, True), keySign, required_notes))
+
+
+            result[index][index1]["voicings"] = matching_voicings
+            result[index][index1]["relativeVoicings"] = matching_voicings_relative
+            
+            result[index][index1]["leftHandVoicings"] = getPossibleLeftHandVoicings(voicings, required_notes, allTopNotes[1], keySign)
+
+    return result
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         return
     
 
@@ -622,8 +711,12 @@ def main():
         voicing["rightHand"] = [midi_map[note_v.replace("b", "-")] for note_v in voicing["rightHand"]]
         
 
-    result = analyze_lead_sheet(score, keySign)
-    result = rePossibleVoicings(result, keySign, voicings)
+    mode = sys.argv[2]
+    result = analyze_lead_sheet(score, keySign, mode)
+    if mode == "improAccompanying":
+        result = reImproAccompanyingVoicings(result, keySign, voicings)
+    else:
+        result = rePossibleVoicings(result, keySign, voicings)
 
     print(json.dumps({"result": result, "keySign": keySign, "timeSign": timeSign}))
 

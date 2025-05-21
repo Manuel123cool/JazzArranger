@@ -95,6 +95,7 @@ async function syncFetch(url) {
       console.log("fetchDATE", fetchData)
       keySign = fetchData["keySign"]
       let timeSign = fetchData["timeSign"]
+      const mode = fetchData["mode"]
       fetchData = fetchData["noteInfo"]
 
       
@@ -109,7 +110,7 @@ async function syncFetch(url) {
       console.log(voicings, chordNames, staveNotes, tupletsIndeces)
       let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, fetchData);
       for (let i = 0; i < staveNotes.length ; ++i) {
-        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign, timeSign); 
+        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign, timeSign, mode); 
       }
 
     } catch (error) {

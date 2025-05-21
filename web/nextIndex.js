@@ -42,7 +42,47 @@ function isDifferentInversion(currentVoicing, nextVoicing) {
     return false;
 }
 
-function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
+function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex, overallMode) {
+    if (overallMode === "improAccompanying" && Number(mode) == 1) {
+        const currentTopNote = twoHandedVoicings[currentIndex][1].at(-1).relative_to_key
+
+        if (currentIndex > twoHandedVoicings.length - 1 || currentIndex == twoHandedVoicings.length - 1) {
+            currentIndex = 0;
+        }
+        let once = false
+
+        for (let i = currentIndex + 1; i < twoHandedVoicings.length; ++i) {
+            if (twoHandedVoicings.length > 0 && twoHandedVoicings[i][1].at(-1).relative_to_key == currentTopNote) {
+                return i
+            }
+            if (i == twoHandedVoicings.length - 1 && !once) {
+                i = 0;
+                once = true;
+            }  
+        }
+        return currentIndex;
+    }
+
+
+    if (overallMode === "improAccompanying" && Number(mode) == 6) {
+        const currentTopNote = twoHandedVoicings[currentIndex][1].at(-1).relative_to_key
+        if (currentIndex > twoHandedVoicings.length - 1 || currentIndex == twoHandedVoicings.length - 1) {
+            currentIndex = 0;
+        }
+        let once = false
+
+        for (let i = currentIndex + 1; i < twoHandedVoicings.length; ++i) {
+            if (twoHandedVoicings.length > 0 && twoHandedVoicings[i][1].at(-1).relative_to_key != currentTopNote) {
+                return i
+            }
+            if (i == twoHandedVoicings.length - 1 && !once) {
+                i = 0;
+                once = true;
+            }  
+        }
+        return currentIndex;
+    }
+
     if (Number(mode) == 1) {
         if (currentIndex > twoHandedVoicings.length - 1 || currentIndex >= twoHandedVoicings.length -1 ) {
             return 0;
@@ -164,7 +204,43 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex) {
             }
         }
     } 
+    
 
     if (currentIndex >= leftHandedVoicings.length + twoHandedVoicings.length - 1) return 0; else
     return currentIndex + 1;
+}
+
+function changeOctave(twoHandedVoicings, currentIndex, measureId, noteId) {
+    const currentOctaveChange = twoHandedVoicings[currentIndex][0][0].octave_change ? twoHandedVoicings[currentIndex][0][0].octave_change : 0
+    let nextOctave = currentOctaveChange ? currentOctaveChange : 0;
+    if (currentOctaveChange == 0) nextOctave = 1
+    if (currentOctaveChange == -1) nextOctave = 0
+    if (currentOctaveChange == 1) nextOctave = -1
+
+    for (let i = 0; i < twoHandedVoicings[currentIndex].length; ++ i) {
+        for (let j = 0; j < twoHandedVoicings[currentIndex][i].length; ++j) {
+            twoHandedVoicings[currentIndex][i][j].octave_change = nextOctave;
+        }
+    }
+
+    const url = "/changeOctave/" + indexForRoute;
+    try {
+        const response = fetch(url, {
+            method: "POST",
+            body: JSON.stringify({"measureId": measureId, "voicingIndex": currentIndex, octaveChange: nextOctave, elemId: noteId}),
+            headers: { 
+                "Content-Type": "application/json" // 🠐- Wichtig!
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+    } catch (error) {
+        console.error(error.message);
+    }
+    
+    return twoHandedVoicings
+
+
 }

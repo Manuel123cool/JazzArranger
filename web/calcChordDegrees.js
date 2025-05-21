@@ -117,12 +117,12 @@ function calcChordDegrees(voicing, chordDetails) {
     const intervals = getIntervals(voicingCombined.map(note => noteToMidiVal(note)), chordDetails.map(note => noteToMidiVal(note)))[1]
 
     let degreeMap = DOMINANT_DEGREES_MAP
-    if (getChordSymbol(chordDetails.map(note => note.note_key )).includes("-")) {
+    if (getChordSymbol(chordDetails.map(note => note.note_key )).includes("b5")) {
+        degreeMap = HALF_DIMINISHED_DEGREES_MAP
+    } else if (getChordSymbol(chordDetails.map(note => note.note_key )).includes("-")) {
         degreeMap = MINOR_DEGREES_MAP
     } else if (getChordSymbol(chordDetails.map(note => note.note_key )).includes("maj")) {
         degreeMap = MAJOR_DEGREES_MAP
-    } else if (getChordSymbol(chordDetails.map(note => note.note_key )).includes("b5")) {
-        degreeMap = HALF_DIMINISHED_DEGREES_MAP
     } 
 
     return (JSON.stringify(intervals.slice(0, voicing[0].length).map(midiNote => degreeMap[midiNote])) + " | " + 

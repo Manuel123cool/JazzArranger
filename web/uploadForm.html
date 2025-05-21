@@ -16,8 +16,9 @@
             padding: 20px;
             margin: 20px 0;
         }
-        input[type="file"] {
+        input[type="file"], input[type="text"], select {
             margin: 10px 0;
+            padding: 8px;
         }
         button {
             padding: 10px 20px;
@@ -37,13 +38,38 @@
             margin-top: 20px;
             color: red;
         }
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        label {
+            margin-top: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <h1>Upload XML or MusicXML Files</h1>
     <div class="upload-container">
         <form id="uploadForm" enctype="multipart/form-data">
-            <input type="file" name="file" accept=".xml,.musicxml" required>
+            <div class="form-field">
+                <label for="file">File:</label>
+                <input type="file" name="file" accept=".xml,.musicxml" required>
+            </div>
+            <div class="form-field">
+                <label for="mode">Mode:</label>
+                <select name="mode" id="mode" required>
+                    <option value="standard">Standard</option>
+                    <option value="melodyAccompanying">Melody Accompanying</option>
+                    <option value="improAccompanying">Impro Accompanying</option>
+                    <option value="practiceImprovistation">Practice Improvistation</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="fileName">File Name:</label>
+                <input type="text" name="fileName" id="fileName" placeholder="Enter file name" required>
+            </div>
             <br>
             <button type="submit">Upload</button>
         </form>
