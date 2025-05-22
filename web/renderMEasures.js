@@ -815,7 +815,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     let trebleTupletIndeces = allData.tupletsIndeces[measureIndex + lineIndex * measureCount];
 
-    if (mode == "melodyAccompanying") {
+    if (mode == "melodyAccompanying" || mode == "improAccompanying") {
         let combineResultTreble  = combineRests(processedTrebleNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
         trebleTupletIndeces = combineResultTreble.newTupletIndeces;
         processedTrebleNotes =  combineResultTreble.newNotes;
