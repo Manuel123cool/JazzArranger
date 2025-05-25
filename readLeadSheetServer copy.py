@@ -523,45 +523,74 @@ def analyze_lead_sheet(score, keySign, mode):
 
     return returnArray
 
-def createRhytmVersion(alternativeRythm, measureNotes):
-    measureNotes = copy.deepcopy(measureNotes)
-    if len(measureNotes) == 0:
-        return None
-    
-    reAlternativeMeasure = []
-
-    currentIndex = 0
-    for rythmElem in alternativeRythm:
-        if not(rythmElem[1]):
-            reAlternativeMeasure.append({"elem_name": "Rest", "chord_details": [], "elem_length": rythmElem[0], "relative_to_key": ("Rest", -1)})
-        else:
-            measureNotes[currentIndex]["elem_length"] = rythmElem[0]
-            reAlternativeMeasure.append(measureNotes[currentIndex])
-            if currentIndex + 1 < len(measureNotes): 
-                currentIndex += 1
-
-    return reAlternativeMeasure
-
-def createRhytmVersions(result, keySign, mode):
+def createRhytmVersions():
     returnArray = []
+    # Partitur laden
+
+    # Melodie und Akkorde extrahieren
+    melody = None
+    chords = None
     
+    for part in score.parts:
+        if any(isinstance(el, (note.Note, note.Rest)) for el in part.recurse()):
+            melody = part
+        if any(isinstance(el, harmony.ChordSymbol) for el in part.recurse()):
+            chords = part
+
+    if not melody:
+        return
+    if not chords:
+        return
+
+    # Melodie und Akkorde nach Takten organisieren
+    melody_measures = melody.getElementsByClass('Measure')
+    chord_measures = chords.getElementsByClass('Measure')
 
     # Analyse der Übereinstimmungen pro Takt
-    alternativeRythms = [
-        [(1, True), (1, False), (1, True), (1, False)],
-        [(1.5, True), (0.5, False), (0.5, True), (1, False), (1, False)],
-        [(1, True), (0.5, False), (0.5, True), (1, False), (1, True)],
-        [(0.5, False), (0.5, True), (1, False), (1, True), (1, False)],
-        [(0.5, False), (0.5, True), (1, False), (1, True), (0.5, False), (0.5, True)],
-        [(2, False), (1.5, False), (0.5, True)],
-    ]
-
-    for measure in result:
+    
+    for measure_num, (melody_measure, chord_measure) in enumerate(zip(melody_measures, chord_measures), 1):
         returnArray.append([])
-        returnArray[-1].append(measure)
-        for alternativeRythm in alternativeRythms:
-                returnArray[-1].append(createRhytmVersion(alternativeRythm, measure))
-        
+
+        # Noten und Pausen im aktuellen Takt sammeln
+        elements = [el for el in melody_measure.recurse() if isinstance(el, (note.Note, note.Rest))]
+        chord_symbols = [el for el in chord_measure.recurse() if isinstance(el, harmony.ChordSymbol)]
+
+        # Noten und Pausen durchlaufen und Akkorde mit exaktem Offset abgleichen
+        for elem in elements:
+            elem_offset = elem.offset
+            elem_name = "Rest" if isinstance(elem, note.Rest) else elem.pitch.nameWithOctave
+            elem_length = elem.duration.quarterLength
+
+            # Suche nach einem Akkord mit exakt demselben Offset
+            matching_chord = None
+            for chord_symbol in chord_symbols:
+                chord_offset = chord_symbol.offset
+                if abs(chord_offset - elem_offset) < 0.0001:  # Toleranz für Gleitkommavergleich
+                    matching_chord = chord_symbol
+                    break
+
+            from fractions import Fraction
+            if isinstance(elem_length, Fraction):
+                elem_length = {"numerator": elem_length.numerator, "denominator": elem_length.denominator}
+
+
+            relative_to_key = None
+            if not(elem.isRest):
+                noteKey = getNoteFromMidiNumber(elem.pitch.midi, "#" in elem.name)
+                hasAccidental = "-" in noteKey or "#" in noteKey
+
+                relative_to_key = (noteKey, Eccidental.NATURAL.value) if (get_note_status_in_key_midi(elem.pitch.midi, keySign)[1] == MidiAccidentalStatus.CHROMATIC_OUT_OF_KEY and not(hasAccidental)) else (noteKey, Eccidental.NONE.value)
+            else:
+                relative_to_key = ("Rest", -1)
+
+            if matching_chord:
+                chord_pitches = [p.nameWithOctave for p in matching_chord.pitches]
+
+                returnArray[-1].append({"elem_name": elem_name, "chord_details": chord_pitches, "elem_length": elem_length, "relative_to_key":  relative_to_key})
+            
+            else:
+                returnArray[-1].append({"elem_name": "Rest", "chord_details": [], "elem_length": elem_length, "relative_to_key": ("Rest", -1)})
+
     return returnArray
 
 import json
@@ -754,15 +783,12 @@ def main():
         
 
     mode = sys.argv[2]
-    
+
     result = analyze_lead_sheet(score, keySign, mode)
-    
     if mode == "improAccompanying":
         
 
         result = reImproAccompanyingVoicings(result, keySign, voicings)
-        result = createRhytmVersions(result, keySign, voicings)
-        
     else:
         result = analyze_lead_sheet(score, keySign, mode)
 

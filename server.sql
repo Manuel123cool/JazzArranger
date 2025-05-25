@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS score (
 CREATE TABLE IF NOT EXISTS measure (
   measure_id SERIAL PRIMARY KEY,
 
+  measure_alternative_count INT DEFAULT 0,
+  current_measure_alternative INT DEFAULT 0,
+
   score_id integer,
   CONSTRAINT fk_score
       FOREIGN KEY(score_id)

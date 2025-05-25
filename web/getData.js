@@ -1,4 +1,3 @@
-
 function splitIntoX(arr) {
   const result = [];
   for (let i = 0; i < arr.length; i += measureCount) {
@@ -73,6 +72,14 @@ function getVoicings(jsonData) {
   return voicingsMeasures;
 }
 
+function makeSingleMeasures(noteInfo, measureIndeces) {
+  let result = [];
+  for (let i = 0; i < measureIndeces.length; ++i) {
+    result.push(noteInfo[i][measureIndeces[i]])
+  }
+  return result
+}
+
 async function syncFetch(url) {
     try {
       const response = await fetch(url);
@@ -92,17 +99,24 @@ async function syncFetch(url) {
     try {
       // Fetch ausführen
       fetchData = await syncFetch('http://localhost:3000/data/' + indexForRoute); // Example API
+
+      let allMeasures = null;
+      if (fetchData["mode"] == "improAccompanying") {
+        allMeasures = fetchData.noteInfo
+        measureIndeces = fetchData.measureIndeces
+      }
+
       console.log("fetchDATE", fetchData)
       keySign = fetchData["keySign"]
       let timeSign = fetchData["timeSign"]
       const mode = fetchData["mode"]
-      fetchData = fetchData["noteInfo"]
+      if (mode == "improAccompanying") {fetchData = makeSingleMeasures(fetchData.noteInfo, fetchData.measureIndeces)} else {fetchData = fetchData["noteInfo"]}
 
       
       // Code, der NUR nach dem Fetch ausgeführt wird
 
       let tupletsIndeces = createTubletIndexFromJson(fetchData);
-      staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData));
+      let staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData));
       staveNotes = splitIntoX(staveNotes);
       let chordNames = splitIntoX(getChordNames(fetchData));
       let voicings = splitIntoX(getVoicings(fetchData));
@@ -110,7 +124,7 @@ async function syncFetch(url) {
       console.log(voicings, chordNames, staveNotes, tupletsIndeces)
       let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, fetchData);
       for (let i = 0; i < staveNotes.length ; ++i) {
-        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign, timeSign, mode); 
+        renderMeasures(staveNotes[i], 220 * i, i, chordNames[i], allData, fetchData, keySign, timeSign, mode, {allMeasures, measureIndeces}); 
       }
 
     } catch (error) {

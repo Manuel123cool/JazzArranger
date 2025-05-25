@@ -290,7 +290,9 @@ svg.addEventListener('chordClick', (e) => {
     const noteIndex = e.detail.chordPosition[1]
     const measureIndex = groupIndex * measureCount + measureInGroupIndex;
 
-    if (e.detail.allData.chordNames[groupIndex][measureInGroupIndex][noteIndex] != "Unknown chord") {
+    if (e.detail.allData.chordNames[groupIndex][measureInGroupIndex][noteIndex] != "Unknown chord" &&
+        Number(document.getElementById("mode-select1").value) != 8
+    ) {
         if (e.detail.allData.voicings[groupIndex][measureInGroupIndex][noteIndex].length > 0) {
              // Neue Keys aus den Voicings erstellen (nur erste Note oder alle Voicings)
              let newKeys = [];
@@ -315,6 +317,7 @@ svg.addEventListener('chordClick', (e) => {
                     lastAddedVoicingIndex = i;
                 }
              }
+
 
              if (lastAddedVoicingIndex != null) {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
@@ -358,9 +361,30 @@ svg.addEventListener('chordClick', (e) => {
 
         }   
     }
+    
+    if (e.detail.mode === "improAccompanying" && Number(document.getElementById("mode-select1").value) == 8) {
+        e.detail.allMeasures.measureIndeces[measureIndex] += 1;
+        if (e.detail.allMeasures.measureIndeces[measureIndex] >= e.detail.allMeasures.allMeasures[e.detail.allMeasures.measureIndeces[measureIndex]].length) {
+            e.detail.allMeasures.measureIndeces[measureIndex] = 0;
+        }
+        
+        const singleMeasures = makeSingleMeasures(e.detail.allMeasures.allMeasures, e.detail.allMeasures.measureIndeces)
+        e.detail.originalData = singleMeasures;
+        let tupletsIndeces = createTubletIndexFromJson(singleMeasures);
+        let staveNotes = createStaveNotesFromJson(singleMeasures, getVoicings(singleMeasures));
+        staveNotes = splitIntoX(staveNotes);
+        let chordNames = splitIntoX(getChordNames(singleMeasures));
+        let voicings = splitIntoX(getVoicings(singleMeasures));
+  
+        let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, singleMeasures);
+        console.log(allData)
+        e.detail.allData = allData;
+        
+    }
+
     isClicked = true;
     for (let i = 0; i < e.detail.allData.staveNotes.length ; ++i) {
-        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber, e.detail.timeSign, e.detail.mode); 
+        renderMeasures(e.detail.allData.staveNotes[i], 220 * i, i, e.detail.allData.chordNames[i], e.detail.allData, e.detail.originalData, e.detail.keySignatureNumber, e.detail.timeSign, e.detail.mode, e.detail.allMeasures); 
     }
     isClicked = false;
 
@@ -722,10 +746,63 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes) {
     }
     return tupletGroups;
 }
+
+function sortTextElementsByPosition(textElements, verticalTolerance = 50) {
+    // Konvertiere NodeList zu Array und hole Positionen
+    const elementsWithPosition = Array.from(textElements).map(el => {
+        const bbox = el.getBBox();
+        return {
+            element: el,
+            x: bbox.x + bbox.width / 2, // Verwende die Mitte des Elements
+            y: bbox.y + bbox.height / 2
+        };
+    });
+
+    // Gruppiere Elemente in Zeilen basierend auf Y-Position
+    const rows = [];
+    elementsWithPosition.forEach(item => {
+        // Finde eine existierende Zeile innerhalb der vertikalen Toleranz
+        let foundRow = false;
+        for (let row of rows) {
+            if (Math.abs(row.y - item.y) <= verticalTolerance) {
+                row.elements.push(item);
+                foundRow = true;
+                break;
+            }
+        }
+        
+        // Wenn keine passende Zeile gefunden wurde, erstelle eine neue
+        if (!foundRow) {
+            rows.push({
+                y: item.y,
+                elements: [item]
+            });
+        }
+    });
+
+    // Sortiere Zeilen von oben nach unten
+    rows.sort((a, b) => a.y - b.y);
+
+    // Sortiere Elemente innerhalb jeder Zeile von links nach rechts
+    rows.forEach(row => {
+        row.elements.sort((a, b) => a.x - b.x);
+    });
+
+    // Erstelle flaches Array in der richtigen Reihenfolge
+    const sortedElements = [];
+    rows.forEach(row => {
+        row.elements.forEach(item => {
+            sortedElements.push(item.element);
+        });
+    });
+
+    return sortedElements;
+}
+
 // Angepasste renderOneMeasure-Funktion
 const measureWidth = 350;
 
-function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, mode) {
+function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, mode, allMeasures) {
     let staveWidth = measureWidth;
 
     const keySignatureMap = {
@@ -894,21 +971,44 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         });
         tuplet.setContext(context).draw()
     }
-    // Integration der klickbaren Bereiche für Akkordsymbole
+    
+    const textElements = svg.querySelectorAll('.vf-annotation text');
+    const sortedTextElements = sortTextElementsByPosition(textElements);
+
+    console.log(chordNames, allData)
+    let chordsInMeasureCount = 0;
     processedTrebleNotes.forEach((note, noteIndex) => {
         if (note.annotation && (isClicked == null || isClicked)) {
             const { text: chordText, position } = note.annotation;
             const chordPosition = [...position, lineIndex];
 
             // Finde das Text-Element der Annotation im SVG
-            const textElements = svg.querySelectorAll('.vf-annotation text');
-            let textElement;
-            textElements.forEach((el) => {
-                if (el.textContent === chordText && !el.associatedRect) {
-                    textElement = el;
-                    el.associatedRect = true; // Markiere das Element als verarbeitet
+            let countChords = 0;
+            let textElement = null;
+            for (let i = 0; i < allData.chordNames.length; ++i) {
+                for (let j = 0; j < allData.chordNames[i].length; ++j) {
+                    let countChordsInMeasure = 0;
+                    for (let k = 0; k < allData.chordNames[i][j].length; ++k) {
+                        if (j == measureIndex && countChordsInMeasure == chordsInMeasureCount && lineIndex == i) {
+                            textElement = sortedTextElements[countChords];
+                            break;
+                        }
+                        
+                        if (allData.chordNames[i][j][k] !== "Unknown chord") {
+                            countChords += 1;
+                            countChordsInMeasure += 1;
+                        };
+                    } 
+                    if (textElement) {
+                        break;
+                    }
+                } 
+                if (textElement) {
+                    break;
                 }
-            });
+            }
+
+            chordsInMeasureCount += 1;
 
             if (textElement) {
                 const bbox = textElement.getBBox();
@@ -929,7 +1029,7 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                 rect.addEventListener('click', () => {
                     console.log(`Akkord ${chordText} wurde geklickt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode, allMeasures},
                     });
                     svg.dispatchEvent(event);
                 });
@@ -939,18 +1039,19 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
                     e.preventDefault();
                     console.log(`Akkord ${chordText} wurde getippt! Position: ${chordPosition}`);
                     const event = new CustomEvent('chordClick', {
-                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode},
+                        detail: { chord: chordText, chordPosition, allData, originalData, keySignatureNumber, timeSign, mode, allMeasures},
                     });
                     svg.dispatchEvent(event);
                 });
             }
         }
     });
+    
     return staveWidth;
 }
 
 // Angepasste renderThreeMeasure-Funktion
-function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign, timeSign, mode) {
+function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, originalData, keySign, timeSign, mode, allMeasures) {
     // Fülle leere Takte mit Viertelpausen
     for (let i = musicElements.length; i < measureCount; ++i) {
         musicElements.push([
@@ -1028,6 +1129,6 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
 
     let staveWidth = 0;
     for (let i = 0; i < measureCount; ++i) {
-        staveWidth += renderOneMeasure(musicElementsBase[i], musicElements[i], staveWidth + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign, mode);
+        staveWidth += renderOneMeasure(musicElementsBase[i], musicElements[i], staveWidth + leftOffset, yOffset, i == 0, keySign, chordNames[i], allData, i, lineIndex, originalData, timeSign, mode, allMeasures);
     }
 }

@@ -11,7 +11,6 @@ const { Client } = require('pg');
 require('dotenv').config()
 const format = require('pg-format');
 const { json } = require('stream/consumers');
-const {createScoreComping, readScoreComping} = require("./scoreComping.js")
 
 const client = new Client({
 	user: 'postgres',
@@ -122,11 +121,13 @@ class DB {
     async createScore(scoreJson, scoreId = -1) {
         const client = this.client;
         try {
+            console.log(JSON.stringify(scoreJson))
             await client.query('BEGIN');
 
             const {fileName, storedName, noteInfo, keySign, timeSign, mode} = scoreJson;
 
             let score_id = null;
+            console.log("scoreId", scoreId)
             if (scoreId === -1) {
                 
                 const {rows: [{time_signature_id}]} = await client.query(
@@ -923,11 +924,7 @@ app.get('/updateScore/:scoreId', async (req, res) => {
         const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
         await db.deleteScoreData(scoreId);
 
-        if (await db.getScoreMode(scoreId) == "improAccompanying") {
-            createScoreComping(oneFileJson, db, scoreId)
-        } else {
-            db.createScore(oneFileJson, scoreId);
-        }
+        db.createScore(oneFileJson, scoreId);
 
         res.redirect('/main');
     });
@@ -959,13 +956,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
 
         const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
 
-        
-        if (await db.getScoreMode(scoreId) == "improAccompanying") {
-            createScoreComping(oneFileJson, db)
-        } else {
-            db.createScore(oneFileJson);
-        }
-
+        db.createScore(oneFileJson);
         db.deleteScore(scoreId);
 
         res.json({ message: `Transposed successfully!` });
@@ -974,12 +965,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
 
 app.get('/data/:index', async (req, res) => {
     const index = req.params.index;
-    
-    if (await db.getScoreMode(index) == "improAccompanying") {
-        res.json(await readScoreComping(index, db));
-    } else {
-        res.json(await db.readScore(index)); 
-    }
+    res.json(await db.readScore(index)); 
 });
 
 app.use(express.static(path.join(__dirname, 'web')));
@@ -1090,12 +1076,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const result = parsedOutput["result"]
         const oneFileJson = { fileName: fileName , storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"], mode: mode};
 
-        if (await mode == "improAccompanying") {
-            createScoreComping(oneFileJson, db)
-        } else {
-            db.createScore(oneFileJson);
-        }
-
+        db.createScore(oneFileJson);
     });
     res.json({ message: `File ${fileName} uploaded successfully!` });
 });
