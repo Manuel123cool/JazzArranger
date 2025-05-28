@@ -101,6 +101,7 @@ async function syncFetch(url) {
       fetchData = await syncFetch('http://localhost:3000/data/' + indexForRoute); // Example API
 
       let allMeasures = null;
+      let measureIndeces = null
       if (fetchData["mode"] == "improAccompanying") {
         allMeasures = fetchData.noteInfo
         measureIndeces = fetchData.measureIndeces

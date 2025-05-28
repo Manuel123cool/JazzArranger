@@ -520,9 +520,11 @@ class DB {
         return scoreNamesResult.rows
     }
 
-    async updateVoicingIndex(scoreId, measureId, voicingIndex, noteId, leftHand = false) {
+    
+    async updateCurrentAlternative(scoreId, measureId, alternativeCount) {
+        alternativeCount = alternativeCount || 0
         const measureIdQuery = `
-                SELECT measure_id 
+                SELECT measure_id, measure_alternative_count
                 FROM measure 
                 WHERE score_id = $1 
                 ORDER BY measure_id
@@ -530,7 +532,52 @@ class DB {
         
         const measureIdsResult = await this.client.query(measureIdQuery, [scoreId]);
 
-        let measure_id = measureIdsResult.rows[measureId].measure_id;
+        let measure_id = null;
+
+        let measureCount = 0;
+        for (let i = 0; i < measureIdsResult.rows.length; ++i) {
+            if (measureIdsResult.rows[i].measure_alternative_count == 0 || !measureIdsResult.rows[i].measure_alternative_count) {
+                measureCount += 1
+            }
+
+            if (measureCount - 1 === measureId) {
+                measure_id = measureIdsResult.rows[i].measure_id;
+                break
+            }
+        }
+        const updateQuery = `
+                UPDATE measure
+                SET current_measure_alternative = $1
+                WHERE measure_id = $2;
+            `;
+        this.client.query(updateQuery, [alternativeCount, measure_id]);
+    }
+
+    async updateVoicingIndex(scoreId, measureId, voicingIndex, noteId, alternativeCount, leftHand = false) {
+        alternativeCount = alternativeCount || 0
+        const measureIdQuery = `
+                SELECT measure_id, measure_alternative_count
+                FROM measure 
+                WHERE score_id = $1 
+                ORDER BY measure_id
+        `;
+        
+        const measureIdsResult = await this.client.query(measureIdQuery, [scoreId]);
+
+        let measure_id = null;
+
+        let measureCount = 0;
+        for (let i = 0; i < measureIdsResult.rows.length; ++i) {
+            if (measureIdsResult.rows[i].measure_alternative_count == 0 || !measureIdsResult.rows[i].measure_alternative_count) {
+                measureCount += 1
+            }
+
+            if (measureCount - 1 === measureId) {
+                measure_id = measureIdsResult.rows[i + alternativeCount].measure_id;
+                break
+            }
+        }
+        
 
         const elemIdQuery = `
                 SELECT measure_elem_id 
@@ -1014,7 +1061,14 @@ app.get('/json', (req, res) => {
 // Route zum Speichern des JSON-Arra
 app.use(express.json());
 app.post('/saveStatus/:scoreId', async (req, res) => {
-    db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId);
+    db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId, req.body.alternativeCount);
+
+    res.json({ message: 'JSON erfolgreich gespeichert!' });
+});
+
+app.use(express.json());
+app.post('/saveCurrentAlternative/:scoreId', async (req, res) => {
+    db.updateCurrentAlternative(req.params.scoreId, req.body.measureId, req.body.alternativeCount);
 
     res.json({ message: 'JSON erfolgreich gespeichert!' });
 });
@@ -1030,7 +1084,7 @@ app.post('/changeOctave/:scoreId', async (req, res) => {
 
 app.use(express.json());
 app.post('/saveStatusLeftHand/:scoreId', async (req, res) => {
-    db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId, true);
+    db.updateVoicingIndex(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.elemId, null, true);
 
     res.json({ message: 'JSON erfolgreich gespeichert!' });
 });

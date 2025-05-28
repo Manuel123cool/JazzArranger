@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS note (
     is_natural BOOLEAN,
     octave SMALLINT,
     is_rest BOOLEAN,
-    octave_change SMALLINT
+    octave_change SMALLINT,
+
+    references_note_id INTEGER
 );
 
 CREATE TABLE time_signature (

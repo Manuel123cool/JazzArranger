@@ -257,12 +257,12 @@ const svg = document.querySelector('svg');
 
 let isClicked = null;
 
-async function changeVoicingIndex(measureId, voicingIndex, elemId) {
+async function changeVoicingIndex(measureId, voicingIndex, elemId, alternativeCount = null) {
     const url = "/saveStatus/" + indexForRoute;
     try {
         const response = await fetch(url, {
             method: "POST",
-            body: JSON.stringify({"measureId": measureId, "voicingIndex": voicingIndex, "elemId": elemId}),
+            body: JSON.stringify({"measureId": measureId, "voicingIndex": voicingIndex, "elemId": elemId, "alternativeCount": alternativeCount}),
             headers: { 
                 "Content-Type": "application/json" // 🠐- Wichtig!
               },
@@ -277,6 +277,25 @@ async function changeVoicingIndex(measureId, voicingIndex, elemId) {
     }
 }
 
+async function changeCurrentAlternative(measureId, alternativeCount) {
+    const url = "/saveCurrentAlternative/" + indexForRoute;
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            body: JSON.stringify({"measureId": measureId, "alternativeCount": alternativeCount}),
+            headers: { 
+                "Content-Type": "application/json" // 🠐- Wichtig!
+              },
+        });
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+
+        const json = await response.json();
+    } catch (error) {
+        console.error(error.message);
+    }
+}
 // Globale Event-Listener für benutzerdefinierte chordClick-Events
 svg.addEventListener('chordClick', (e) => {
     context.clear()
@@ -341,7 +360,10 @@ svg.addEventListener('chordClick', (e) => {
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
 
-             changeVoicingIndex(measureIndex, voicngIndex, noteIndex);
+             if (e.detail.mode === "improAccompanying")
+                changeVoicingIndex(measureIndex, voicngIndex, noteIndex, e.detail.allMeasures.measureIndeces[measureIndex]);
+             else
+                changeVoicingIndex(measureIndex, voicngIndex, noteIndex);
 
              // Dauer der Note anpassen (entferne "r" für Rest)
              const duration = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].getDuration().replace("r", "");
@@ -349,13 +371,14 @@ svg.addEventListener('chordClick', (e) => {
              // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
              let newNote = new VexFlow.StaveNote({
                  keys: newKeys,
-                 duration: duration,
+                 duration: durationAddDottted(duration, e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].dots),
                  
              });
 
              newNote.dots = e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex].dots
              if (newNote.dots == 1) {
                 VF.Dot.buildAndAttach([newNote], {all: true})
+                console.log(newNote.getTicks().value())
             }
              e.detail.allData.staveNotes[groupIndex][measureInGroupIndex][noteIndex] = newNote;
 
@@ -367,7 +390,8 @@ svg.addEventListener('chordClick', (e) => {
         if (e.detail.allMeasures.measureIndeces[measureIndex] >= e.detail.allMeasures.allMeasures[e.detail.allMeasures.measureIndeces[measureIndex]].length) {
             e.detail.allMeasures.measureIndeces[measureIndex] = 0;
         }
-        
+        changeCurrentAlternative(measureIndex, e.detail.allMeasures.measureIndeces[measureIndex])
+
         const singleMeasures = makeSingleMeasures(e.detail.allMeasures.allMeasures, e.detail.allMeasures.measureIndeces)
         e.detail.originalData = singleMeasures;
         let tupletsIndeces = createTubletIndexFromJson(singleMeasures);
@@ -377,9 +401,7 @@ svg.addEventListener('chordClick', (e) => {
         let voicings = splitIntoX(getVoicings(singleMeasures));
   
         let allData = allDataAddVoicingIndeces({"chordNames": chordNames, "staveNotes": staveNotes, "voicings": voicings, "tupletsIndeces": tupletsIndeces}, singleMeasures);
-        console.log(allData)
         e.detail.allData = allData;
-        
     }
 
     isClicked = true;
@@ -432,24 +454,26 @@ function removeRedundantAccidentals(notes, keySignature) {
             let newNote = new VexFlow.StaveNote({
                 clef: note.clef,
                 keys: newKeys,
-                duration: finalDuration,
+                duration: durationAddDottted(finalDuration, note.dots),
             });
             newNote.dots = note.dots
 
             if (note.dots == 1) {
                  VF.Dot.buildAndAttach([newNote], {all: true})
+                 console.log(newNote.getTicks().value())
             }
             return newNote
         }
         let newNote = new VexFlow.StaveNote({
             clef: note.clef,
             keys: newKeys,
-            duration: note.getDuration(),
+            duration: durationAddDottted(note.getDuration(), note.dots),
         });
         newNote.dots = note.dots
 
         if (newNote.dots == 1) {
              VF.Dot.buildAndAttach([newNote], {all: true})
+             console.log(newNote.getTicks().value())
         }
         return newNote
 
@@ -683,10 +707,11 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
                 const newRest = new VexFlow.StaveNote({
                     clef: group[0].note.clef,
                     keys: group[0].note.getKeys(),
-                    duration: currentDurationObj.closestDuration + "r" // Sicherstellen, dass es eine Pause ist
+                    duration: currentDurationObj.closestDuration + "r"// Sicherstellen, dass es eine Pause ist
                 });
                 if (currentDurationObj.closestDuration.includes("d")) {
                     VexFlow.Dot.buildAndAttach([newRest], { all: true });
+                    console.log(newRest.getTicks().value())
                 }
                 newNotes.push(newRest);
                 remainingTicks = remainingTicks - newRest.getTicks().value();
@@ -801,6 +826,16 @@ function sortTextElementsByPosition(textElements, verticalTolerance = 50) {
 
 // Angepasste renderOneMeasure-Funktion
 const measureWidth = 350;
+
+function durationAddDottted(duration, dotCount = 1) {
+    if (dotCount != 1) {
+        return duration
+    }
+    if (duration.includes("r")) {
+        return duration.slice(0, 1) + 'd' + duration.slice(1);
+    }
+    return duration + "d"
+}
 
 function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, isFirstMeasure, keySignatureNumber, chordNames, allData, measureIndex, lineIndex, originalData, timeSign, mode, allMeasures) {
     let staveWidth = measureWidth;
@@ -975,7 +1010,6 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
     const textElements = svg.querySelectorAll('.vf-annotation text');
     const sortedTextElements = sortTextElementsByPosition(textElements);
 
-    console.log(chordNames, allData)
     let chordsInMeasureCount = 0;
     processedTrebleNotes.forEach((note, noteIndex) => {
         if (note.annotation && (isClicked == null || isClicked)) {
@@ -1065,13 +1099,15 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
     for (let i = 0; i < musicElements.length; ++i) {
         musicElementsBase.push(
             musicElements[i].map(note => {
-                const duration = note.getDuration();
-                const finalDuration = duration.includes("r") ? duration : duration + "r";
-                let newNote = new StaveNote({ clef: "bass", keys: ["d/3"], duration: finalDuration });
+                const duration = note.getDuration()
+                const finalDuration = durationAddDottted(duration.includes("r") ? duration : duration + "r", note.dots)
+                
+                let newNote = new StaveNote({ clef: "bass", keys: ["d/3"], duration: finalDuration});
 
                 newNote.dots = note.dots
                 if (newNote.dots == 1) {
                     VF.Dot.buildAndAttach([newNote], {all: true});
+                    console.log(newNote.getTicks().value())
                 }
                 return newNote
             })
@@ -1113,7 +1149,7 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
             // Erstelle eine neue StaveNote mit den neuen Keys und der Dauer
             let newNote = new VexFlow.StaveNote({
                 keys: newKeys,
-                duration: duration,
+                duration: durationAddDottted(duration, musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]].dots),
                 clef: "bass",
             });
 
@@ -1121,6 +1157,7 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
 
             if (newNote.dots == 1) {
                 VF.Dot.buildAndAttach([newNote], {all: true});
+                console.log(newNote.getTicks().value())
             }
             musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]] = newNote;
         }               

@@ -523,20 +523,32 @@ def analyze_lead_sheet(score, keySign, mode):
 
     return returnArray
 
-def createRhytmVersion(alternativeRythm, measureNotes):
+def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
+    originalMeasureNotes = measureNotes
     measureNotes = copy.deepcopy(measureNotes)
     if len(measureNotes) == 0:
         return None
     
     reAlternativeMeasure = []
-
+            
     currentIndex = 0
-    for rythmElem in alternativeRythm:
+    for rythmElemIndex, rythmElem in enumerate(alternativeRythm):
         if not(rythmElem[1]):
             reAlternativeMeasure.append({"elem_name": "Rest", "chord_details": [], "elem_length": rythmElem[0], "relative_to_key": ("Rest", -1)})
         else:
-            measureNotes[currentIndex]["elem_length"] = rythmElem[0]
-            reAlternativeMeasure.append(measureNotes[currentIndex])
+            measureNote = copy.deepcopy(measureNotes[currentIndex])
+            measureNote["elem_length"] = rythmElem[0]
+            measureNote["voicings"] = None
+            measureNote["relativeVoicings"] = None
+            measureNote["leftHandVoicings"] = None
+            measureNote["chord_details"] = None
+
+            if rythmElemIndex == len(alternativeRythm) and rythmElem[0] == 0.5 and isNextMeasureChord:
+                measureNote["references"] = currentIndex + 1
+            else:
+                measureNote["references"] = currentIndex
+
+            reAlternativeMeasure.append(measureNote)
             if currentIndex + 1 < len(measureNotes): 
                 currentIndex += 1
 
@@ -545,22 +557,29 @@ def createRhytmVersion(alternativeRythm, measureNotes):
 def createRhytmVersions(result, keySign, mode):
     returnArray = []
     
-
     # Analyse der Übereinstimmungen pro Takt
     alternativeRythms = [
         [(1, True), (1, False), (1, True), (1, False)],
-        [(1.5, True), (0.5, False), (0.5, True), (1, False), (1, False)],
+        [(0.5, True), (0.5, False), (0.5, False), (0.5, True), (1, False), (1, False)],
         [(1, True), (0.5, False), (0.5, True), (1, False), (1, True)],
         [(0.5, False), (0.5, True), (1, False), (1, True), (1, False)],
         [(0.5, False), (0.5, True), (1, False), (1, True), (0.5, False), (0.5, True)],
         [(2, False), (1.5, False), (0.5, True)],
     ]
 
-    for measure in result:
+    for index, measure in enumerate(result):
         returnArray.append([])
         returnArray[-1].append(measure)
         for alternativeRythm in alternativeRythms:
-                returnArray[-1].append(createRhytmVersion(alternativeRythm, measure))
+                
+                isNextMeasureChord = False
+                if index + 1 < len(result):
+                    for measureElem in result[index + 1]:
+                        if len(measureElem["chord_details"]) > 0:
+                            isNextMeasureChord = True
+                            break
+
+                returnArray[-1].append(createRhytmVersion(alternativeRythm, measure, isNextMeasureChord))
         
     return returnArray
 

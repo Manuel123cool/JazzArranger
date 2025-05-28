@@ -94,6 +94,7 @@ function createStaveNotesFromJson(jsonData, voicings, voicingsIndeces, keySign) 
             note.dots = 1
 
             VF.Dot.buildAndAttach([note], {all: true});
+            console.log(note.getTicks().value())
           }
           
             staffNotesMeasure.push(note);
