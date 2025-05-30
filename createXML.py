@@ -4,19 +4,27 @@ import sys
 from fractions import Fraction
 import requests
 
-possible_chords = {
-    "X7":    [0, 4, 7, 10],
-    "X-7":   [0, 3, 7, 10],
-    "Xmaj7": [0, 4, 7, 11],
-    "X-7b5": [0, 3, 6, 10]
-}
-
 possibleChordsKind = [
-    "dominant-seventh",
-    'minor-seventh',
-    'major-seventh',
-    'half-diminished-seventh'
+    "dominant-seventh",           # X7
+    'minor-seventh',              # X-7
+    'major-seventh',              # Xmaj7
+    'half-diminished-seventh',    # X-7b5
+    'minor-major-seventh',        # X-maj7
+    'major-sixth',                # X6
+    'minor-sixth',                # X-6
+    'suspended-fourth-seventh'    # Xsus4
 ]
+
+possible_chords = {
+    "X7":     [0, 4, 7, 10],
+    "X-7":    [0, 3, 7, 10],
+    "Xmaj7":  [0, 4, 7, 11],
+    "X-7b5":  [0, 3, 6, 10],
+    "X-maj7": [0, 3, 7, 11],        
+    "X6":     [0, 4, 7, 9],     
+    "X-6":    [0, 3, 7, 9],     
+    "Xsus4":  [0, 5, 7, 10]         
+}
 
 def get_chord_symbol(notes):
     if len(notes) == 0:

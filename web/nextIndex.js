@@ -210,7 +210,7 @@ function nextIndex(twoHandedVoicings, leftHandedVoicings, mode, currentIndex, ov
     return currentIndex + 1;
 }
 
-function changeOctave(twoHandedVoicings, currentIndex, measureId, noteId) {
+function changeOctave(twoHandedVoicings, currentIndex, measureId, noteId, alternativeCount) {
     const currentOctaveChange = twoHandedVoicings[currentIndex][0][0].octave_change ? twoHandedVoicings[currentIndex][0][0].octave_change : 0
     let nextOctave = currentOctaveChange ? currentOctaveChange : 0;
     if (currentOctaveChange == 0) nextOctave = 1
@@ -227,7 +227,7 @@ function changeOctave(twoHandedVoicings, currentIndex, measureId, noteId) {
     try {
         const response = fetch(url, {
             method: "POST",
-            body: JSON.stringify({"measureId": measureId, "voicingIndex": currentIndex, octaveChange: nextOctave, elemId: noteId}),
+            body: JSON.stringify({"measureId": measureId, "voicingIndex": currentIndex, octaveChange: nextOctave, elemId: noteId, alternativeCount}),
             headers: { 
                 "Content-Type": "application/json" // 🠐- Wichtig!
             },
@@ -241,6 +241,4 @@ function changeOctave(twoHandedVoicings, currentIndex, measureId, noteId) {
     }
     
     return twoHandedVoicings
-
-
 }

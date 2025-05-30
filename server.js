@@ -167,7 +167,7 @@ class DB {
                     } = this.parseNoteKey(elem_name);
                     const notesIds = await this.insertNote([{
                         note_key,
-                        duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("numerator") ? 0.5 : elem_length,
+                        duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("noteTypeValue") ? elem_length.noteTypeValue : elem_length,
                         relativeToKey: this.parseNoteKey(noteObj.relative_to_key[0]).note_key,
                         is_natural: noteObj.relative_to_key[1] === 1,
                         octave,
@@ -607,17 +607,31 @@ class DB {
         }
         
     }
-    async updateChangeOctave(scoreId, measureIndex, voicingIndex, octaveChange, noteId) {
-        console.log(scoreId, measureIndex, voicingIndex, octaveChange, noteId)
+    async updateChangeOctave(scoreId, measureIndex, voicingIndex, octaveChange, noteId, alternativeCount) {
+        alternativeCount = alternativeCount || 0
+
         const measureIdQuery = `
-            SELECT measure_id 
+            SELECT measure_id, measure_alternative_count 
             FROM measure 
             WHERE score_id = $1 
             ORDER BY measure_id
         `;
         
         const measureIdsResult = await this.client.query(measureIdQuery, [scoreId]);
-        let measure_id = measureIdsResult.rows[measureIndex].measure_id;
+
+        let measure_id = null;
+
+        let measureCount = 0;
+        for (let i = 0; i < measureIdsResult.rows.length; ++i) {
+            if (measureIdsResult.rows[i].measure_alternative_count == 0 || !measureIdsResult.rows[i].measure_alternative_count) {
+                measureCount += 1
+            }
+
+            if (measureCount - 1 === measureIndex) {
+                measure_id = measureIdsResult.rows[i + alternativeCount].measure_id;
+                break
+            }
+        }
 
         // Hole die measure_elem_id für den angegebenen measure_id und elemId (index)
         const elemIdQuery = `
@@ -1076,7 +1090,7 @@ app.post('/saveCurrentAlternative/:scoreId', async (req, res) => {
 // Route zum Speichern des JSON-Arra
 app.use(express.json());
 app.post('/changeOctave/:scoreId', async (req, res) => {
-    db.updateChangeOctave(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.octaveChange, req.body.elemId);
+    db.updateChangeOctave(req.params.scoreId, req.body.measureId, req.body.voicingIndex, req.body.octaveChange, req.body.elemId, req.body.alternativeCount);
 
     res.json({ message: 'JSON erfolgreich gespeichert!' });
 });

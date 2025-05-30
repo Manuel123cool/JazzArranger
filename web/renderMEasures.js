@@ -28,10 +28,11 @@ function createBeamEights(notes, notesTriplets, indecesTubles, timeSignNumerator
         for (let j = 0; j < indecesTubles.length; ++j) { 
             
             if (indecesTubles[j].length > 0 && indecesTubles[j][1] == i) {
-                noLongerThanEights.push(-1);
-                noLongerThanEights.push(-1);
+                for (let k = 0; k < (notes[i].getTicks().value() / 2048) * 2; ++k) {
+                    noLongerThanEights.push(-1);
+                }
 
-                allNotesTicks.push(2048 * 2)
+                allNotesTicks.push(2048 * ((notes[i].getTicks().value() / 2048) * 2))
             
                 i += 3;
                 continueVar = true;
@@ -147,11 +148,11 @@ function createBeamSixteenth(notes, notesTriplets, indecesTubles, timeSignNumera
         for (let j = 0; indecesTubles && j < indecesTubles.length; ++j) { 
             
             if (indecesTubles[j].length > 0 && indecesTubles[j][1] == i) {
-                for (let k = 0; k < 4; ++k) { 
+                for (let k = 0; k < (notes[i].getTicks().value() / 1024) * 4; ++k) {
                     noLongerThanSixteenth.push(-1);
                 }
 
-                allNotesTicks.push(1024 * 4)
+                allNotesTicks.push(1024 * ((notes[i].getTicks().value() / 1024) * 4))
             
                 i += 3;
                 continueVar = true;
@@ -342,7 +343,7 @@ svg.addEventListener('chordClick', (e) => {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
                 
                 if (e.detail.mode === "improAccompanying" && Number(document.getElementById("mode-select1").value) == 7) {
-                    e.detail.originalData[measureIndex][noteIndex].voicings = changeOctave(e.detail.originalData[measureIndex][noteIndex].voicings, voicngIndex, measureIndex, noteIndex)
+                    e.detail.originalData[measureIndex][noteIndex].voicings = changeOctave(e.detail.originalData[measureIndex][noteIndex].voicings, voicngIndex, measureIndex, noteIndex, e.detail.allMeasures.measureIndeces[measureIndex])
                 } else {
                     voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex, e.detail.mode)
 
@@ -457,7 +458,7 @@ function removeRedundantAccidentals(notes, keySignature) {
                 duration: durationAddDottted(finalDuration, note.dots),
             });
             newNote.dots = note.dots
-
+            console.log(newNote.getTicks().value())
             if (note.dots == 1) {
                  VF.Dot.buildAndAttach([newNote], {all: true})
                  console.log(newNote.getTicks().value())
@@ -745,7 +746,7 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
 }
 
 
-function createTupletGroups(tupletsIndeces, measureIndex, notes) {
+function createTupletGroups(tupletsIndeces, measureIndex, notes, otherThanEights = false) {
     let counter = 0;
     let tupletGroups = []
 
@@ -753,7 +754,7 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes) {
 
     for (let i = 0; i < tupletsIndeces.length; ++i) {
         for (let j = 0; j < tupletsIndeces[i].length; ++j) {
-            if (tupletsIndeces[i][j][0] != measureIndex) {
+            if (tupletsIndeces[i][j][0] != measureIndex || (notes[tupletsIndeces[i][j][1]].getTicks().value() != 2048 && !otherThanEights)) {
                 continue
             }
             if (counter == 0 ) {
@@ -827,13 +828,15 @@ function sortTextElementsByPosition(textElements, verticalTolerance = 50) {
 // Angepasste renderOneMeasure-Funktion
 const measureWidth = 350;
 
-function durationAddDottted(duration, dotCount = 1) {
-    if (dotCount != 1) {
+function durationAddDottted(duration, dotCount) {
+    if (dotCount === undefined || dotCount != 1) {
+        console.log(duration, dotCount)
         return duration
     }
     if (duration.includes("r")) {
         return duration.slice(0, 1) + 'd' + duration.slice(1);
     }
+    console.log(duration + "d", dotCount)
     return duration + "d"
 }
 
@@ -851,12 +854,18 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     const trebleStave = new Stave(10 + xOffset, 40 + yOffset, staveWidth);
     if (isFirstMeasure) {
-        trebleStave.addClef("treble").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
+        trebleStave.addClef("treble").addKeySignature(keySignature);
+        if (lineIndex === 0) {
+            trebleStave.addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator)
+        }
     }
 
     const bassStave = new Stave(10 + xOffset, 140 + yOffset, staveWidth);
     if (isFirstMeasure) {
-        bassStave.addClef("bass").addKeySignature(keySignature).addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator);
+        bassStave.addClef("bass").addKeySignature(keySignature);
+        if (lineIndex === 0) {
+            bassStave.addTimeSignature(timeSign.numerator +  "/" + timeSign.denominator)
+        }
     }
 
     let connector = null;
@@ -939,14 +948,14 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     // Integrate NoteGrouper for treble notes
     
-    const trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
+    let trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes);
 
     const beamsSixtheenthTreble = createBeamSixteenth(processedTrebleNotes, trebleNoteTupletGroups, trebleTupletIndeces, timeSign.numerator)
     const trebleBeams = [...beamsSixtheenthTreble, ...createBeamEights(processedTrebleNotes, trebleNoteTupletGroups, trebleTupletIndeces, timeSign.numerator), ...trebleNoteTupletGroups].map(group => new VexFlow.Beam(group));
 
 
     // Integrate NoteGrouper for bass notes
-    const bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes)
+    let bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes)
 
     const beamsSixtheenthBass = createBeamSixteenth(processedBassNotes, bassNoteTupletGroups, bassTupletIndeces, timeSign.numerator)
 
@@ -990,6 +999,9 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     trebleBeams.forEach(beam => beam.setContext(context).draw());
     bassBeams.forEach(beam => beam.setContext(context).draw());
+
+    trebleNoteTupletGroups = createTupletGroups(allData.tupletsIndeces, measureIndex + lineIndex * measureCount, processedTrebleNotes, true);
+    bassNoteTupletGroups = createTupletGroups(bassTupletIndeces, measureIndex + lineIndex * measureCount, processedBassNotes, true)
 
     for (let i = 0; i < trebleNoteTupletGroups.length; i++) {
         const tuplet = new VF.Tuplet(trebleNoteTupletGroups[i], {

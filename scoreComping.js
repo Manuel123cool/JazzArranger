@@ -289,7 +289,7 @@ async function insertMeasureReferences(measureNotes, alternativeCount, db, score
 
             notesIds = await insertNote([{
                 note_key,
-                duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("numerator") ? 0.5 : elem_length,
+                duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("noteTypeValue") ? elem_length.noteTypeValue : elem_length,
                 relativeToKey: db.parseNoteKey(noteObj.relative_to_key[0]).note_key,
                 is_natural: noteObj.relative_to_key[1] === 1,
                 octave,
@@ -301,7 +301,7 @@ async function insertMeasureReferences(measureNotes, alternativeCount, db, score
         } else {
             notesIds = await db.insertNote([{
                 note_key,
-                duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("numerator") ? 0.5 : elem_length,
+                duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("noteTypeValue") ? elem_length.noteTypeValue : elem_length,
                 relativeToKey: db.parseNoteKey(noteObj.relative_to_key[0]).note_key,
                 is_natural: noteObj.relative_to_key[1] === 1,
                 octave,
@@ -562,12 +562,14 @@ async function readScoreComping(scoreId, db) {
                 for (let k = 0; k < newResultInfo[i][j].length; ++k) {
                     if (newResultInfo[i][j][k].hasOwnProperty("references")) {
                         let tempI = i;
-                        if (newResultInfo[i][0].length <= newResultInfo[i][j][k].references) {
+                        let references = newResultInfo[i][j][k].references;
+                        if (newResultInfo[i][0].length <= references) {
                             tempI += 1;
+                            references = 0;
                         }
-                        newResultInfo[i][j][k].voicings = newResultInfo[tempI][0][newResultInfo[i][j][k].references].voicings;
-                        newResultInfo[i][j][k].leftHandVoicings = newResultInfo[tempI][0][newResultInfo[i][j][k].references].leftHandVoicings;
-                        newResultInfo[i][j][k].chord_details = newResultInfo[tempI][0][newResultInfo[i][j][k].references].chord_details;
+                        newResultInfo[i][j][k].voicings = newResultInfo[tempI][0][references].voicings;
+                        newResultInfo[i][j][k].leftHandVoicings = newResultInfo[tempI][0][references].leftHandVoicings;
+                        newResultInfo[i][j][k].chord_details = newResultInfo[tempI][0][references].chord_details;
                     }
                 }
             }

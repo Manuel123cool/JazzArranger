@@ -498,7 +498,17 @@ def analyze_lead_sheet(score, keySign, mode):
 
             from fractions import Fraction
             if isinstance(elem_length, Fraction):
-                elem_length = {"numerator": elem_length.numerator, "denominator": elem_length.denominator}
+                noteTypeValue = {
+                    "whole": 4.0,
+                    "half": 2.0, 
+                    "quarter": 1.0,
+                    "eighth": 0.5,
+                    "16th": 0.25,
+                    "32nd": 0.125,
+                    "64th": 0.0625
+                }.get(elem.duration.type, 1.0)
+                        
+                elem_length = {"numerator": elem_length.numerator, "denominator": elem_length.denominator, "noteTypeValue": noteTypeValue}
 
 
             relative_to_key = None
@@ -515,6 +525,20 @@ def analyze_lead_sheet(score, keySign, mode):
             if matching_chord:
                 chord_pitches = [p.nameWithOctave for p in matching_chord.pitches]
 
+                #music21 liest alles als major 7th sus, deswegen die Logik
+                if "sus" in matching_chord.chordKindStr:
+                    interval_chord = []
+                    
+                    interval_chord = midi_map[chord_pitches[-1]] - midi_map[chord_pitches[0]]
+                    while interval_chord > 12:
+                        interval_chord -= 12
+
+                    if interval_chord == 11:
+                        newMinor7th = getNoteFromMidiNumber(midi_map[chord_pitches[-1]] - 1)
+                        chord_pitches[-1] = newMinor7th
+
+
+
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": chord_pitches, "elem_length": elem_length, "relative_to_key":  relative_to_key})
             elif mode == "standard":
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": [], "elem_length": elem_length, "relative_to_key": relative_to_key})
@@ -524,6 +548,13 @@ def analyze_lead_sheet(score, keySign, mode):
     return returnArray
 
 def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
+    def nextChordInMeasure(currentIndex, plus = 1):
+        for i in range(currentIndex + plus, len(measureNotes)):
+            if measureNotes[i]["elem_name"] != "Rest":
+                return i
+            
+        return currentIndex
+    
     originalMeasureNotes = measureNotes
     measureNotes = copy.deepcopy(measureNotes)
     if len(measureNotes) == 0:
@@ -531,7 +562,8 @@ def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
     
     reAlternativeMeasure = []
             
-    currentIndex = 0
+    currentIndex = nextChordInMeasure(0, plus=0)
+
     for rythmElemIndex, rythmElem in enumerate(alternativeRythm):
         if not(rythmElem[1]):
             reAlternativeMeasure.append({"elem_name": "Rest", "chord_details": [], "elem_length": rythmElem[0], "relative_to_key": ("Rest", -1)})
@@ -543,18 +575,17 @@ def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
             measureNote["leftHandVoicings"] = None
             measureNote["chord_details"] = None
 
-            if rythmElemIndex == len(alternativeRythm) and rythmElem[0] == 0.5 and isNextMeasureChord:
-                measureNote["references"] = currentIndex + 1
+            if rythmElemIndex == len(alternativeRythm) - 1 and rythmElem[0] == 0.5 and isNextMeasureChord:
+                measureNote["references"] = len(measureNotes)
             else:
                 measureNote["references"] = currentIndex
 
             reAlternativeMeasure.append(measureNote)
-            if currentIndex + 1 < len(measureNotes): 
-                currentIndex += 1
+            currentIndex = nextChordInMeasure(currentIndex)
 
     return reAlternativeMeasure
 
-def createRhytmVersions(result, keySign, mode):
+def createRhytmVersions(result, keySign, mode, timeSign):
     returnArray = []
     
     # Analyse der Übereinstimmungen pro Takt
@@ -567,6 +598,13 @@ def createRhytmVersions(result, keySign, mode):
         [(2, False), (1.5, False), (0.5, True)],
     ]
 
+    if timeSign["numerator"] == 3:
+        alternativeRythms = [
+            [(1, True), (1, False), (1, False)],
+            [(0.5, True), (0.5, False), (0.5, False), (0.5, True), (1, False)],
+            [(0.5, False), (0.5, True), (1, False), (1, True)],
+        ]
+        
     for index, measure in enumerate(result):
         returnArray.append([])
         returnArray[-1].append(measure)
@@ -575,7 +613,7 @@ def createRhytmVersions(result, keySign, mode):
                 isNextMeasureChord = False
                 if index + 1 < len(result):
                     for measureElem in result[index + 1]:
-                        if len(measureElem["chord_details"]) > 0:
+                        if measureElem["chord_details"] and len(measureElem["chord_details"]) > 0:
                             isNextMeasureChord = True
                             break
 
@@ -587,18 +625,26 @@ import json
 import re
 
 possibleChords = {
-    "X7":    [0, 4, 7, 10],
-    "X-7":   [0, 3, 7, 10],
-    "Xmaj7": [0, 4, 7, 11],
-    "X-7b5": [0, 3, 6, 10]
+    "X7":     [0, 4, 7, 10],
+    "X-7":    [0, 3, 7, 10],
+    "Xmaj7":  [0, 4, 7, 11],
+    "X-7b5":  [0, 3, 6, 10],
+    "X-maj7": [0, 3, 7, 11],        
+    "X6":     [0, 4, 7, 9],     
+    "X-6":    [0, 3, 7, 9],     
+    "Xsus4":  [0, 5, 7, 10]         
 }
 
 availableTensions = {
-    "X7":    [2, 1, 3, 6, 9, 8],
-    "X-7":   [2, 5, 9],
-    "Xmaj7": [2, 6, 9],
-    "X-7b5": [2, 5, 8]
-}
+    "X7":     [2, 1, 3, 6, 9, 8],
+    "X-7":    [2, 5, 9],
+    "Xmaj7":  [2, 6, 9],
+    "X-7b5":  [2, 5, 8],
+    "X-maj7": [2, 5, 9],    # Moll Major: 9, 11, b13
+    "X6":     [2, 5, 11],       # Major 6: 9, 11, maj7
+    "X-6":    [2, 5],        # Minor 6: 9, 11
+    "Xsus4":  [2, 1, 3, 4, 8, 9]        # sus4: 9, 13, b7
+} 
 
 import json
 import sys
@@ -671,16 +717,6 @@ def allPossibleTopNotes(chord_notes, top_note):
         return distances[min_dist]
 
     # Annahme: Beispieldefinitionen für possibleChords und availableTensions
-    possibleChords = {
-        'major': [0, 4, 7],
-        'minor': [0, 3, 7],
-        'diminished': [0, 3, 6]
-    }
-    availableTensions = {
-        'major': [2, 9, 14],  # z. B. 9, 11, 13 als MIDI-Offset
-        'minor': [2, 9, 14],
-        'diminished': []
-    }
 
     # Berechne Intervalle relativ zur ersten Note (oder kleinsten Note)
     base_note = min(chord_notes)  # Sicherstellen, dass die Basisnote die kleinste ist
@@ -780,7 +816,7 @@ def main():
         
 
         result = reImproAccompanyingVoicings(result, keySign, voicings)
-        result = createRhytmVersions(result, keySign, voicings)
+        result = createRhytmVersions(result, keySign, voicings, timeSign)
         
     else:
         result = analyze_lead_sheet(score, keySign, mode)
