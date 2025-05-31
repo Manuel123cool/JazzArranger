@@ -542,12 +542,12 @@ def analyze_lead_sheet(score, keySign, mode):
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": chord_pitches, "elem_length": elem_length, "relative_to_key":  relative_to_key})
             elif mode == "standard":
                 returnArray[-1].append({"elem_name": elem_name, "chord_details": [], "elem_length": elem_length, "relative_to_key": relative_to_key})
-            elif mode == "melodyAccompanying" or mode == "improAccompanying":
+            elif mode == "melodyAccompanying" or mode == "improAccompanying" or mode == "practiceImprovisation":
                 returnArray[-1].append({"elem_name": "Rest", "chord_details": [], "elem_length": elem_length, "relative_to_key": ("Rest", -1)})
 
     return returnArray
 
-def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
+def createRhytmVersion(alternativeRythm, measureNotes, nextMeasureChordIndex):
     def nextChordInMeasure(currentIndex, plus = 1):
         for i in range(currentIndex + plus, len(measureNotes)):
             if measureNotes[i]["elem_name"] != "Rest":
@@ -575,8 +575,8 @@ def createRhytmVersion(alternativeRythm, measureNotes, isNextMeasureChord):
             measureNote["leftHandVoicings"] = None
             measureNote["chord_details"] = None
 
-            if rythmElemIndex == len(alternativeRythm) - 1 and rythmElem[0] == 0.5 and isNextMeasureChord:
-                measureNote["references"] = len(measureNotes)
+            if rythmElemIndex == len(alternativeRythm) - 1 and rythmElem[0] == 0.5 and nextMeasureChordIndex != -1:
+                measureNote["references"] = len(measureNotes) + nextMeasureChordIndex
             else:
                 measureNote["references"] = currentIndex
 
@@ -610,14 +610,14 @@ def createRhytmVersions(result, keySign, mode, timeSign):
         returnArray[-1].append(measure)
         for alternativeRythm in alternativeRythms:
                 
-                isNextMeasureChord = False
+                nextMeasureChordIndex = -1
                 if index + 1 < len(result):
-                    for measureElem in result[index + 1]:
+                    for nextMeasureIndex, measureElem in enumerate(result[index + 1]):
                         if measureElem["chord_details"] and len(measureElem["chord_details"]) > 0:
-                            isNextMeasureChord = True
+                            nextMeasureChordIndex = nextMeasureIndex
                             break
 
-                returnArray[-1].append(createRhytmVersion(alternativeRythm, measure, isNextMeasureChord))
+                returnArray[-1].append(createRhytmVersion(alternativeRythm, measure, nextMeasureChordIndex))
         
     return returnArray
 
@@ -649,7 +649,7 @@ availableTensions = {
 import json
 import sys
 
-def rePossibleVoicings(result, keySign, voicings):
+def rePossibleVoicings(result, keySign, voicings, mode):
     # Voicings für jeden Akkord finden
     for index, oneMeasure in enumerate(result):
         for index1, oneNoteInfo in enumerate(oneMeasure):
@@ -667,7 +667,6 @@ def rePossibleVoicings(result, keySign, voicings):
             # Passende Voicings finden
             matching_voicings = []
             matching_voicings_relative = []
-            matching_voicings_implied = []
 
             for v_index, voicing in enumerate(voicings):
                 if voicing["rightHand"][0] == "ANY": continue
@@ -688,7 +687,7 @@ def rePossibleVoicings(result, keySign, voicings):
             result[index][index1]["voicings"] = matching_voicings
             result[index][index1]["relativeVoicings"] = matching_voicings_relative
             
-            result[index][index1]["leftHandVoicings"] = getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign)
+            result[index][index1]["leftHandVoicings"] = getPossibleLeftHandVoicings(voicings, required_notes, top_note, keySign, mode)
 
     return result
 
@@ -742,7 +741,7 @@ def allPossibleTopNotes(chord_notes, top_note):
     # Falls kein Akkord gefunden wird, nur die angepassten Noten zurückgeben
     return [adjustOctave(n) for n in chord_notes]
 
-def reImproAccompanyingVoicings(result, keySign, voicings):
+def reImproAccompanyingVoicings(result, keySign, voicings, mode):
     for index, oneMeasure in enumerate(result):
         for index1, oneNoteInfo in enumerate(oneMeasure):
             chord_notes = [midi_map[note_detail.replace("b", "-")] for note_detail in oneNoteInfo['chord_details']]
@@ -755,12 +754,21 @@ def reImproAccompanyingVoicings(result, keySign, voicings):
             required_notes = chord_notes
             root_note = chord_notes[0]
             
+            
+            
+
             # Passende Voicings finden
             matching_voicings = []
             matching_voicings_relative = []
-            matching_voicings_implied = []
 
             allTopNotes = allPossibleTopNotes(required_notes, top_note)
+
+            if mode == "practiceImprovisation":
+                result[index][index1]["voicings"] = []
+                result[index][index1]["relativeVoicings"] = []
+                result[index][index1]["leftHandVoicings"] = getPossibleLeftHandVoicings(voicings, required_notes, allTopNotes[1], keySign)
+
+                continue
 
             for top_note in allTopNotes:
                 for v_index, voicing in enumerate(voicings):
@@ -812,16 +820,14 @@ def main():
     
     result = analyze_lead_sheet(score, keySign, mode)
     
-    if mode == "improAccompanying":
+    if mode == "improAccompanying" or mode == "practiceImprovisation":
         
-
-        result = reImproAccompanyingVoicings(result, keySign, voicings)
+        result = reImproAccompanyingVoicings(result, keySign, voicings, mode)
         result = createRhytmVersions(result, keySign, voicings, timeSign)
         
     else:
-        result = analyze_lead_sheet(score, keySign, mode)
 
-        result = rePossibleVoicings(result, keySign, voicings)
+        result = rePossibleVoicings(result, keySign, voicings, mode)
 
     print(json.dumps({"result": result, "keySign": keySign, "timeSign": timeSign}))
 

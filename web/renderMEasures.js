@@ -342,7 +342,7 @@ svg.addEventListener('chordClick', (e) => {
              if (lastAddedVoicingIndex != null) {
                 voicngIndex = e.detail.allData.addedVoicingsIndeces[lastAddedVoicingIndex][3];
                 
-                if (e.detail.mode === "improAccompanying" && Number(document.getElementById("mode-select1").value) == 7) {
+                if ((e.detail.mode === "improAccompanying" || e.detail.mode == "practiceImprovisation") && Number(document.getElementById("mode-select1").value) == 7) {
                     e.detail.originalData[measureIndex][noteIndex].voicings = changeOctave(e.detail.originalData[measureIndex][noteIndex].voicings, voicngIndex, measureIndex, noteIndex, e.detail.allMeasures.measureIndeces[measureIndex])
                 } else {
                     voicngIndex = nextIndex(e.detail.originalData[measureIndex][noteIndex].voicings, e.detail.originalData[measureIndex][noteIndex].leftHandVoicings, document.getElementById("mode-select1").value, voicngIndex, e.detail.mode)
@@ -361,7 +361,7 @@ svg.addEventListener('chordClick', (e) => {
              }
              e.detail.originalData[measureIndex][noteIndex].voicingIndex = voicngIndex;
 
-             if (e.detail.mode === "improAccompanying")
+             if (e.detail.mode === "improAccompanying" || e.detail.mode === "practiceImprovisation")
                 changeVoicingIndex(measureIndex, voicngIndex, noteIndex, e.detail.allMeasures.measureIndeces[measureIndex]);
              else
                 changeVoicingIndex(measureIndex, voicngIndex, noteIndex);
@@ -386,7 +386,7 @@ svg.addEventListener('chordClick', (e) => {
         }   
     }
     
-    if (e.detail.mode === "improAccompanying" && Number(document.getElementById("mode-select1").value) == 8) {
+    if ((e.detail.mode === "improAccompanying" || e.detail.mode === "practiceImprovisation") && Number(document.getElementById("mode-select1").value) == 8) {
         e.detail.allMeasures.measureIndeces[measureIndex] += 1;
         if (e.detail.allMeasures.measureIndeces[measureIndex] >= e.detail.allMeasures.allMeasures[e.detail.allMeasures.measureIndeces[measureIndex]].length) {
             e.detail.allMeasures.measureIndeces[measureIndex] = 0;
@@ -396,7 +396,7 @@ svg.addEventListener('chordClick', (e) => {
         const singleMeasures = makeSingleMeasures(e.detail.allMeasures.allMeasures, e.detail.allMeasures.measureIndeces)
         e.detail.originalData = singleMeasures;
         let tupletsIndeces = createTubletIndexFromJson(singleMeasures);
-        let staveNotes = createStaveNotesFromJson(singleMeasures, getVoicings(singleMeasures));
+        let staveNotes = createStaveNotesFromJson(singleMeasures, getVoicings(singleMeasures), e.detail.mode);
         staveNotes = splitIntoX(staveNotes);
         let chordNames = splitIntoX(getChordNames(singleMeasures));
         let voicings = splitIntoX(getVoicings(singleMeasures));
@@ -458,10 +458,8 @@ function removeRedundantAccidentals(notes, keySignature) {
                 duration: durationAddDottted(finalDuration, note.dots),
             });
             newNote.dots = note.dots
-            console.log(newNote.getTicks().value())
             if (note.dots == 1) {
                  VF.Dot.buildAndAttach([newNote], {all: true})
-                 console.log(newNote.getTicks().value())
             }
             return newNote
         }
@@ -474,7 +472,6 @@ function removeRedundantAccidentals(notes, keySignature) {
 
         if (newNote.dots == 1) {
              VF.Dot.buildAndAttach([newNote], {all: true})
-             console.log(newNote.getTicks().value())
         }
         return newNote
 
@@ -732,7 +729,7 @@ function combineRests(notes, tupletsIndeces, measureIndex, measureLength) {
                     tickPositionsTuplet.shift();
 
                     const ghost = new VF.GhostNote({
-                        duration: "8" // quarter note
+                        duration: "8" 
                     });
                     newNotes.splice(j + 1, 0, ghost);
                     j + 1;
@@ -773,7 +770,7 @@ function createTupletGroups(tupletsIndeces, measureIndex, notes, otherThanEights
     return tupletGroups;
 }
 
-function sortTextElementsByPosition(textElements, verticalTolerance = 50) {
+function sortTextElementsByPosition(textElements, verticalTolerance = 80) {
     // Konvertiere NodeList zu Array und hole Positionen
     const elementsWithPosition = Array.from(textElements).map(el => {
         const bbox = el.getBBox();
@@ -830,13 +827,11 @@ const measureWidth = 350;
 
 function durationAddDottted(duration, dotCount) {
     if (dotCount === undefined || dotCount != 1) {
-        console.log(duration, dotCount)
         return duration
     }
     if (duration.includes("r")) {
         return duration.slice(0, 1) + 'd' + duration.slice(1);
     }
-    console.log(duration + "d", dotCount)
     return duration + "d"
 }
 
@@ -910,6 +905,10 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
         return note;
     });
 
+    processedTrebleNotes = moveNotesForDegreeImpro(timeSign.numerator, processedTrebleNotes, chordNames, measureIndex).reNotes;
+    console.log(processedTrebleNotes)
+    chordNames = moveNotesForDegreeImpro(timeSign.numerator, processedTrebleNotes, chordNames, measureIndex).reChordNames;
+
     let processedBassNotes = bassStaveNotes.map((note, noteIndex) => {
         const measureIndexAbsolute = measureIndex + lineIndex * measureCount;
 
@@ -938,6 +937,10 @@ function renderOneMeasure(bassStaveNotes, trebleStaveNotes, xOffset, yOffset, is
 
     if (mode == "melodyAccompanying" || mode == "improAccompanying") {
         let combineResultTreble  = combineRests(processedTrebleNotes, allData.tupletsIndeces,  measureIndex + lineIndex * measureCount);
+        trebleTupletIndeces = combineResultTreble.newTupletIndeces;
+        processedTrebleNotes =  combineResultTreble.newNotes;
+    } else if (mode == "practiceImprovisation") {
+        let combineResultTreble  = combineRests(processedTrebleNotes, [],  measureIndex + lineIndex * measureCount);
         trebleTupletIndeces = combineResultTreble.newTupletIndeces;
         processedTrebleNotes =  combineResultTreble.newNotes;
     }
@@ -1119,7 +1122,6 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
                 newNote.dots = note.dots
                 if (newNote.dots == 1) {
                     VF.Dot.buildAndAttach([newNote], {all: true});
-                    console.log(newNote.getTicks().value())
                 }
                 return newNote
             })
@@ -1169,7 +1171,6 @@ function renderMeasures(musicElements, yOffset, lineIndex, chordNames, allData, 
 
             if (newNote.dots == 1) {
                 VF.Dot.buildAndAttach([newNote], {all: true});
-                console.log(newNote.getTicks().value())
             }
             musicElementsBase[musicElementsIndeces[i][0]][musicElementsIndeces[i][1]] = newNote;
         }               

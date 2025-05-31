@@ -167,7 +167,7 @@ class DB {
                     } = this.parseNoteKey(elem_name);
                     const notesIds = await this.insertNote([{
                         note_key,
-                        duration: typeof elem_length === 'object' || elem_length.hasOwnProperty("noteTypeValue") ? elem_length.noteTypeValue : elem_length,
+                        duration: typeof elem_length === 'object' && elem_length.hasOwnProperty("noteTypeValue") ? elem_length.noteTypeValue : elem_length,
                         relativeToKey: this.parseNoteKey(noteObj.relative_to_key[0]).note_key,
                         is_natural: noteObj.relative_to_key[1] === 1,
                         octave,
@@ -491,9 +491,15 @@ class DB {
 
                         if ( voicings.length > 0) {
                             noteObj.voicings = voicings;
-                            noteObj.leftHandVoicings = leftHandVoicings;
                         } else {
                             noteObj.voicings = [];
+                        }
+    
+                        if (leftHandVoicings.length > 0) {               
+                            noteObj.leftHandVoicings = leftHandVoicings;
+                        } else {
+                            noteObj.leftHandVoicings = [];
+    
                         }
                     }
     
@@ -984,7 +990,7 @@ app.get('/updateScore/:scoreId', async (req, res) => {
         const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
         await db.deleteScoreData(scoreId);
 
-        if (await db.getScoreMode(scoreId) == "improAccompanying") {
+        if (await db.getScoreMode(scoreId) == "improAccompanying" || await db.getScoreMode(scoreId) == "practiceImprovisation") {
             createScoreComping(oneFileJson, db, scoreId)
         } else {
             db.createScore(oneFileJson, scoreId);
@@ -1021,7 +1027,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
         const oneFileJson = { fileName: name.file_name, storedName: name.stored_name, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"]};
 
         
-        if (await db.getScoreMode(scoreId) == "improAccompanying") {
+        if (await db.getScoreMode(scoreId) == "improAccompanying" || await db.getScoreMode(scoreId) == "practiceImprovisation" ) {
             createScoreComping(oneFileJson, db)
         } else {
             db.createScore(oneFileJson);
@@ -1036,7 +1042,7 @@ app.get('/transpose/:scoreId', async (req, res) => {
 app.get('/data/:index', async (req, res) => {
     const index = req.params.index;
     
-    if (await db.getScoreMode(index) == "improAccompanying") {
+    if (await db.getScoreMode(index) == "improAccompanying" || await db.getScoreMode(index) == "practiceImprovisation" ) {
         res.json(await readScoreComping(index, db));
     } else {
         res.json(await db.readScore(index)); 
@@ -1158,7 +1164,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const result = parsedOutput["result"]
         const oneFileJson = { fileName: fileName , storedName: req.file.filename, noteInfo: result, "keySign": parsedOutput["keySign"], "timeSign": parsedOutput["timeSign"], mode: mode};
 
-        if (await mode == "improAccompanying") {
+        if (mode == "improAccompanying" || mode == "practiceImprovisation") {
             createScoreComping(oneFileJson, db)
         } else {
             db.createScore(oneFileJson);

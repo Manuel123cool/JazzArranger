@@ -102,7 +102,7 @@ async function syncFetch(url) {
 
       let allMeasures = null;
       let measureIndeces = null
-      if (fetchData["mode"] == "improAccompanying") {
+      if (fetchData["mode"] == "improAccompanying" || fetchData["mode"] == "practiceImprovisation") {
         allMeasures = fetchData.noteInfo
         measureIndeces = fetchData.measureIndeces
       }
@@ -111,13 +111,13 @@ async function syncFetch(url) {
       keySign = fetchData["keySign"]
       let timeSign = fetchData["timeSign"]
       const mode = fetchData["mode"]
-      if (mode == "improAccompanying") {fetchData = makeSingleMeasures(fetchData.noteInfo, fetchData.measureIndeces)} else {fetchData = fetchData["noteInfo"]}
+      if (mode == "improAccompanying" || mode == "practiceImprovisation") {fetchData = makeSingleMeasures(fetchData.noteInfo, fetchData.measureIndeces)} else {fetchData = fetchData["noteInfo"]}
 
       
       // Code, der NUR nach dem Fetch ausgeführt wird
 
       let tupletsIndeces = createTubletIndexFromJson(fetchData);
-      let staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData));
+      let staveNotes = createStaveNotesFromJson(fetchData, getVoicings(fetchData), mode);
       staveNotes = splitIntoX(staveNotes);
       let chordNames = splitIntoX(getChordNames(fetchData));
       let voicings = splitIntoX(getVoicings(fetchData));

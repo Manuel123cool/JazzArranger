@@ -510,8 +510,7 @@ async function readScoreComping(scoreId, db) {
 
                         const voicingNotesResult = await db.client.query(voicingNotesQuery, [voicing.measure_elem_voicing_id]);
 
-                        // Noten in linke und rechte Hand aufteilen
-                        //constructor(note_key, duration, is_natural, octave, is_rest, relative_to_key = null, oneTuplet = null) {
+                        
                         const leftHandNotes = voicingNotesResult.rows
                             .filter(vn => vn.is_left_hand && !vn.is_implied)
                             .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key, null, vn.octave_change));
@@ -525,6 +524,7 @@ async function readScoreComping(scoreId, db) {
                             .map(vn => new OneNote(vn.note_key, vn.duration, vn.is_natural, vn.octave, false, vn.relative_to_key, null, vn.octave_change));
                         
                         if (leftHandNotes.length > 0 && rightHandNotes.length > 0) {
+                            
                             if (voicing.from_any_top_note) {
                                 leftHandVoicings.push([leftHandNotes, rightHandNotes, impliedNotes]);
                             } else {
@@ -535,9 +535,15 @@ async function readScoreComping(scoreId, db) {
 
                     if ( voicings.length > 0) {
                         noteObj.voicings = voicings;
-                        noteObj.leftHandVoicings = leftHandVoicings;
                     } else {
                         noteObj.voicings = [];
+                    }
+
+                    if (leftHandVoicings.length > 0) {               
+                        noteObj.leftHandVoicings = leftHandVoicings;
+                    } else {
+                        noteObj.leftHandVoicings = [];
+
                     }
                 }
 
@@ -565,7 +571,7 @@ async function readScoreComping(scoreId, db) {
                         let references = newResultInfo[i][j][k].references;
                         if (newResultInfo[i][0].length <= references) {
                             tempI += 1;
-                            references = 0;
+                            references = references - newResultInfo[i][0].length;
                         }
                         newResultInfo[i][j][k].voicings = newResultInfo[tempI][0][references].voicings;
                         newResultInfo[i][j][k].leftHandVoicings = newResultInfo[tempI][0][references].leftHandVoicings;

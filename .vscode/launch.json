@@ -11,7 +11,7 @@
             "program": "${file}",
             "python": "/Users/manuelkuempel/Desktop/JazzArranger/.venv/bin/python",
             "console": "integratedTerminal",
-            "args": ["./uploads/1748546659411.musicxml", "improAccompanying"],
+            "args": ["./Stücke/Giant Steps.musicxml", "practiceImprovisation"],
             "cwd": "${workspaceFolder}"
         },
         {
